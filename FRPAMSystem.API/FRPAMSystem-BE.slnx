@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="../FRPAMSystem.BusinessTier/FRPAMSystem.BusinessTier.csproj" Id="8193072a-666c-4bd0-b447-87b91c35b7d2" />
+  <Project Path="../FRPAMSystem.DataTier/FRPAMSystem.DataTier.csproj" Id="f3928600-3fcf-4ccb-bcb4-a6cd58c03186" />
+  <Project Path="FRPAMSystem.API.csproj" />
+</Solution>
