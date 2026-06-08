@@ -14,8 +14,6 @@
     <Folder Include="Constants\" />
     <Folder Include="Enums\" />
     <Folder Include="Mappers\" />
-    <Folder Include="Services\" />
-    <Folder Include="Payload\" />
   </ItemGroup>
 
   <ItemGroup>
