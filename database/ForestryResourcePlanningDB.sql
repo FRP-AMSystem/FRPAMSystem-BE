@@ -1,92 +1,91 @@
-USE [master]
+/*
+================================================================================
+  Forestry Resource Planning and Allocation Management System
+  Script triển khai schema trên MonsterASP (SQL Server hosting)
+
+  Cách chạy qua SSMS:
+    1. Server name : db54885.databaseasp.net
+    2. Authentication: SQL Server Authentication
+    3. Login         : db54885
+    4. Password      : (lấy từ MonsterASP control panel)
+    5. Connect → chọn database [db54885] (không dùng master)
+    6. Mở file này → Execute (F5)
+
+  Lưu ý MonsterASP:
+    - Hosting KHÔNG cho phép CREATE / DROP DATABASE
+    - Script chỉ DROP TABLE + tạo lại schema trong database đã được cấp
+    - Chạy lại script sẽ XÓA TOÀN BỘ dữ liệu hiện có trong db54885
+
+  Local dev (SQL Express): tạo DB ForestryResourcePlanningDB trên máy local,
+    đổi dòng USE [db54885] thành USE [ForestryResourcePlanningDB]
+================================================================================
+*/
+
+USE [db54885];
 GO
 
-/****** Object:  Database [ForestryResourcePlanningDB]    Script Date: 6/7/2026 6:52:38 PM ******/
--- Xóa database cũ nếu tồn tại (tránh lỗi khi chạy lại script khởi tạo)
-IF DB_ID(N'ForestryResourcePlanningDB') IS NOT NULL
-BEGIN
-    ALTER DATABASE [ForestryResourcePlanningDB] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
-    DROP DATABASE [ForestryResourcePlanningDB];
-END
+SET ANSI_NULLS ON;
+GO
+SET QUOTED_IDENTIFIER ON;
+GO
+SET NOCOUNT ON;
 GO
 
-CREATE DATABASE [ForestryResourcePlanningDB]
+-- -----------------------------------------------------------------------------
+-- Drop tables (thứ tự con → cha; MonsterASP không cho DROP DATABASE)
+-- -----------------------------------------------------------------------------
+IF OBJECT_ID(N'[dbo].[Schedule]', N'U') IS NOT NULL DROP TABLE [dbo].[Schedule];
 GO
--- 160 = SQL Server 2022 (170 chỉ có trên SQL Server 2025)
-ALTER DATABASE [ForestryResourcePlanningDB] SET COMPATIBILITY_LEVEL = 160
+IF OBJECT_ID(N'[dbo].[EquipmentShortageLog]', N'U') IS NOT NULL DROP TABLE [dbo].[EquipmentShortageLog];
 GO
-IF (1 = FULLTEXTSERVICEPROPERTY('IsFullTextInstalled'))
-begin
-EXEC [ForestryResourcePlanningDB].[dbo].[sp_fulltext_database] @action = 'enable'
-end
+IF OBJECT_ID(N'[dbo].[AllocationLandDetail]', N'U') IS NOT NULL DROP TABLE [dbo].[AllocationLandDetail];
 GO
-ALTER DATABASE [ForestryResourcePlanningDB] SET ANSI_NULL_DEFAULT OFF 
+IF OBJECT_ID(N'[dbo].[AllocationHumanDetail]', N'U') IS NOT NULL DROP TABLE [dbo].[AllocationHumanDetail];
 GO
-ALTER DATABASE [ForestryResourcePlanningDB] SET ANSI_NULLS OFF 
+IF OBJECT_ID(N'[dbo].[AllocationEquipmentDetail]', N'U') IS NOT NULL DROP TABLE [dbo].[AllocationEquipmentDetail];
 GO
-ALTER DATABASE [ForestryResourcePlanningDB] SET ANSI_PADDING OFF 
+IF OBJECT_ID(N'[dbo].[AllocationPlan]', N'U') IS NOT NULL DROP TABLE [dbo].[AllocationPlan];
 GO
-ALTER DATABASE [ForestryResourcePlanningDB] SET ANSI_WARNINGS OFF 
+IF OBJECT_ID(N'[dbo].[PhaseHumanRequirement]', N'U') IS NOT NULL DROP TABLE [dbo].[PhaseHumanRequirement];
 GO
-ALTER DATABASE [ForestryResourcePlanningDB] SET ARITHABORT OFF 
+IF OBJECT_ID(N'[dbo].[PhaseEquipmentRequirement]', N'U') IS NOT NULL DROP TABLE [dbo].[PhaseEquipmentRequirement];
 GO
-ALTER DATABASE [ForestryResourcePlanningDB] SET AUTO_CLOSE ON 
+IF OBJECT_ID(N'[dbo].[ExperimentPhase]', N'U') IS NOT NULL DROP TABLE [dbo].[ExperimentPhase];
 GO
-ALTER DATABASE [ForestryResourcePlanningDB] SET AUTO_SHRINK OFF 
+IF OBJECT_ID(N'[dbo].[ExperimentHumanRequirement]', N'U') IS NOT NULL DROP TABLE [dbo].[ExperimentHumanRequirement];
 GO
-ALTER DATABASE [ForestryResourcePlanningDB] SET AUTO_UPDATE_STATISTICS ON 
+IF OBJECT_ID(N'[dbo].[ExperimentEquipmentRequirement]', N'U') IS NOT NULL DROP TABLE [dbo].[ExperimentEquipmentRequirement];
 GO
-ALTER DATABASE [ForestryResourcePlanningDB] SET CURSOR_CLOSE_ON_COMMIT OFF 
+IF OBJECT_ID(N'[dbo].[ExperimentLandRequirement]', N'U') IS NOT NULL DROP TABLE [dbo].[ExperimentLandRequirement];
 GO
-ALTER DATABASE [ForestryResourcePlanningDB] SET CURSOR_DEFAULT  GLOBAL 
+IF OBJECT_ID(N'[dbo].[Experiment]', N'U') IS NOT NULL DROP TABLE [dbo].[Experiment];
 GO
-ALTER DATABASE [ForestryResourcePlanningDB] SET CONCAT_NULL_YIELDS_NULL OFF 
+IF OBJECT_ID(N'[dbo].[EquipmentSubstitution]', N'U') IS NOT NULL DROP TABLE [dbo].[EquipmentSubstitution];
 GO
-ALTER DATABASE [ForestryResourcePlanningDB] SET NUMERIC_ROUNDABORT OFF 
+IF OBJECT_ID(N'[dbo].[EquipmentInstance]', N'U') IS NOT NULL DROP TABLE [dbo].[EquipmentInstance];
 GO
-ALTER DATABASE [ForestryResourcePlanningDB] SET QUOTED_IDENTIFIER OFF 
+IF OBJECT_ID(N'[dbo].[EquipmentType]', N'U') IS NOT NULL DROP TABLE [dbo].[EquipmentType];
 GO
-ALTER DATABASE [ForestryResourcePlanningDB] SET RECURSIVE_TRIGGERS OFF 
+IF OBJECT_ID(N'[dbo].[HumanResourceSkill]', N'U') IS NOT NULL DROP TABLE [dbo].[HumanResourceSkill];
 GO
-ALTER DATABASE [ForestryResourcePlanningDB] SET  ENABLE_BROKER 
+IF OBJECT_ID(N'[dbo].[HumanResourceProfile]', N'U') IS NOT NULL DROP TABLE [dbo].[HumanResourceProfile];
 GO
-ALTER DATABASE [ForestryResourcePlanningDB] SET AUTO_UPDATE_STATISTICS_ASYNC OFF 
+IF OBJECT_ID(N'[dbo].[LandResource]', N'U') IS NOT NULL DROP TABLE [dbo].[LandResource];
 GO
-ALTER DATABASE [ForestryResourcePlanningDB] SET DATE_CORRELATION_OPTIMIZATION OFF 
+IF OBJECT_ID(N'[dbo].[User]', N'U') IS NOT NULL DROP TABLE [dbo].[User];
 GO
-ALTER DATABASE [ForestryResourcePlanningDB] SET TRUSTWORTHY OFF 
+IF OBJECT_ID(N'[dbo].[EquipmentCategory]', N'U') IS NOT NULL DROP TABLE [dbo].[EquipmentCategory];
 GO
-ALTER DATABASE [ForestryResourcePlanningDB] SET ALLOW_SNAPSHOT_ISOLATION OFF 
+IF OBJECT_ID(N'[dbo].[Area]', N'U') IS NOT NULL DROP TABLE [dbo].[Area];
 GO
-ALTER DATABASE [ForestryResourcePlanningDB] SET PARAMETERIZATION SIMPLE 
+IF OBJECT_ID(N'[dbo].[Skill]', N'U') IS NOT NULL DROP TABLE [dbo].[Skill];
 GO
-ALTER DATABASE [ForestryResourcePlanningDB] SET READ_COMMITTED_SNAPSHOT OFF 
+IF OBJECT_ID(N'[dbo].[Role]', N'U') IS NOT NULL DROP TABLE [dbo].[Role];
 GO
-ALTER DATABASE [ForestryResourcePlanningDB] SET HONOR_BROKER_PRIORITY OFF 
-GO
-ALTER DATABASE [ForestryResourcePlanningDB] SET RECOVERY SIMPLE 
-GO
-ALTER DATABASE [ForestryResourcePlanningDB] SET  MULTI_USER 
-GO
-ALTER DATABASE [ForestryResourcePlanningDB] SET PAGE_VERIFY CHECKSUM  
-GO
-ALTER DATABASE [ForestryResourcePlanningDB] SET DB_CHAINING OFF 
-GO
-ALTER DATABASE [ForestryResourcePlanningDB] SET FILESTREAM( NON_TRANSACTED_ACCESS = OFF ) 
-GO
-ALTER DATABASE [ForestryResourcePlanningDB] SET TARGET_RECOVERY_TIME = 60 SECONDS 
-GO
-ALTER DATABASE [ForestryResourcePlanningDB] SET DELAYED_DURABILITY = DISABLED 
-GO
--- OPTIMIZED_LOCKING chỉ có trên SQL Server 2025, bỏ qua trên bản cũ hơn
-ALTER DATABASE [ForestryResourcePlanningDB] SET ACCELERATED_DATABASE_RECOVERY = OFF  
-GO
-ALTER DATABASE [ForestryResourcePlanningDB] SET QUERY_STORE = ON
-GO
-ALTER DATABASE [ForestryResourcePlanningDB] SET QUERY_STORE (OPERATION_MODE = READ_WRITE, CLEANUP_POLICY = (STALE_QUERY_THRESHOLD_DAYS = 30), DATA_FLUSH_INTERVAL_SECONDS = 900, INTERVAL_LENGTH_MINUTES = 60, MAX_STORAGE_SIZE_MB = 1000, QUERY_CAPTURE_MODE = AUTO, SIZE_BASED_CLEANUP_MODE = AUTO, MAX_PLANS_PER_QUERY = 200, WAIT_STATS_CAPTURE_MODE = ON)
-GO
-USE [ForestryResourcePlanningDB]
-GO
+
+-- -----------------------------------------------------------------------------
+-- Create tables
+-- -----------------------------------------------------------------------------
 /****** Object:  Table [dbo].[AllocationEquipmentDetail]    Script Date: 6/7/2026 6:52:39 PM ******/
 SET ANSI_NULLS ON
 GO
@@ -1038,7 +1037,6 @@ ALTER TABLE [dbo].[Schedule]  WITH CHECK ADD  CONSTRAINT [CK_Schedule_Priority] 
 GO
 ALTER TABLE [dbo].[Schedule] CHECK CONSTRAINT [CK_Schedule_Priority]
 GO
-USE [master]
-GO
-ALTER DATABASE [ForestryResourcePlanningDB] SET  READ_WRITE 
+
+PRINT N'Schema ForestryResourcePlanningDB đã được tạo thành công trên db54885.';
 GO
