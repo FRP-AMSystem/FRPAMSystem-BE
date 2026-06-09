@@ -12,7 +12,11 @@ namespace FRPAMSystem.BusinessTier
             services.AddScoped<IRoleService, RoleService>();
             services.AddScoped<IUserService, UserService>();
             services.AddScoped<IAuthService, AuthService>();
-
+            services.AddScoped<ISkillService, SkillService>();
+            services.AddScoped<IAreaService, AreaService>();
+            services.AddScoped<IEquipmentCategoryService, EquipmentCategoryService>();
+            services.AddScoped<IEquipmentTypeService, EquipmentTypeService>();
+            services.AddScoped<IEquipmentInstanceService, EquipmentInstanceService>();
             return services;
         }
     }
