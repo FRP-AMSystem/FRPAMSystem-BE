@@ -26,7 +26,7 @@ jobs:
         run: dotnet build FRPAMSystem.API/FRPAMSystem.API.csproj --configuration Release --no-restore
 
       - name: Publish
-        run: dotnet publish FRPAMSystem.API/FRPAMSystem.API.csproj --configuration Release --output ./publish
+        run: dotnet publish FRPAMSystem.API/FRPAMSystem.API.csproj --configuration Release --output ${{ github.workspace }}/publish
 
       - name: Deploy to MonsterASP.NET via WebDeploy
         uses: rasmusbuchholdt/simply-web-deploy@2.1.0
@@ -35,4 +35,4 @@ jobs:
           server-computer-name: ${{ secrets.SERVER_COMPUTER_NAME }}
           server-username: ${{ secrets.SERVER_USERNAME }}
           server-password: ${{ secrets.SERVER_PASSWORD }}
-          source-path: ./publish
+          source-path: ${{ github.workspace }}/publish
