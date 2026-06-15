@@ -20,6 +20,9 @@ namespace FRPAMSystem.BusinessTier
             services.AddScoped<IExperimentService, ExperimentService>();
             services.AddScoped<IExperimentPhaseService, ExperimentPhaseService>();
             services.AddScoped<ILandResourceService, LandResourceService>();
+            services.AddScoped<IExperimentLandRequirementService, ExperimentLandRequirementService>();
+            services.AddScoped<IExperimentEquipmentRequirementService, ExperimentEquipmentRequirementService>();
+            services.AddScoped<IExperimentHumanRequirementService, ExperimentHumanRequirementService>();
             return services;
         }
     }
