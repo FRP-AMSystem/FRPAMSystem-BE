@@ -23,6 +23,8 @@ namespace FRPAMSystem.BusinessTier
             services.AddScoped<IExperimentLandRequirementService, ExperimentLandRequirementService>();
             services.AddScoped<IExperimentEquipmentRequirementService, ExperimentEquipmentRequirementService>();
             services.AddScoped<IExperimentHumanRequirementService, ExperimentHumanRequirementService>();
+            services.AddScoped<IHumanResourceProfileService, HumanResourceProfileService>();
+            services.AddScoped<IHumanResourceSkillService, HumanResourceSkillService>();
             return services;
         }
     }
