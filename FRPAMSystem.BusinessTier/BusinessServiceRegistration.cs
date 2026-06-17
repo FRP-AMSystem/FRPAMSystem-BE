@@ -25,6 +25,7 @@ namespace FRPAMSystem.BusinessTier
             services.AddScoped<IExperimentHumanRequirementService, ExperimentHumanRequirementService>();
             services.AddScoped<IHumanResourceProfileService, HumanResourceProfileService>();
             services.AddScoped<IHumanResourceSkillService, HumanResourceSkillService>();
+            services.AddScoped<IAllocationPlanService, AllocationPlanService>();
             return services;
         }
     }
