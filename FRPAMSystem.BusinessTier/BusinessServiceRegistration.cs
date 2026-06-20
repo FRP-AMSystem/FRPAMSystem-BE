@@ -28,6 +28,7 @@ namespace FRPAMSystem.BusinessTier
             services.AddScoped<IAllocationPlanService, AllocationPlanService>();
             services.AddScoped<IAllocationLandDetailService, AllocationLandDetailService>();
             services.AddScoped<IAllocationEquipmentDetailService, AllocationEquipmentDetailService>();
+            services.AddScoped<IAllocationHumanDetailService, AllocationHumanDetailService>();
             return services;
         }
     }
