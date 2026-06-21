@@ -272,5 +272,42 @@ namespace FRPAMSystem.BusinessTier.Utils
                 return node == _source ? _target : base.VisitParameter(node);
             }
         }
+        public static IQueryable<T> WhereNullableEqualsIf<T, TValue>(
+    this IQueryable<T> query,
+    TValue? value,
+    Expression<Func<T, TValue?>> propertySelector)
+    where TValue : struct
+        {
+            if (!value.HasValue)
+            {
+                return query;
+            }
+
+            var parameter = propertySelector.Parameters[0];
+
+            var hasValueExpression = Expression.Property(
+                propertySelector.Body,
+                nameof(Nullable<TValue>.HasValue)
+            );
+
+            var valueExpression = Expression.Property(
+                propertySelector.Body,
+                nameof(Nullable<TValue>.Value)
+            );
+
+            var equalExpression = Expression.Equal(
+                valueExpression,
+                Expression.Constant(value.Value)
+            );
+
+            var body = Expression.AndAlso(
+                hasValueExpression,
+                equalExpression
+            );
+
+            var lambda = Expression.Lambda<Func<T, bool>>(body, parameter);
+
+            return query.Where(lambda);
+        }
     }
 }
