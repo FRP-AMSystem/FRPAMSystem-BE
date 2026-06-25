@@ -45,7 +45,13 @@ namespace FRPAMSystem.DataTier.Repository.Interfaces
             Func<IQueryable<T>, IIncludableQueryable<T, object>>? include = null,
             int page = 1,
             int size = 10);
-
+        Task<IPaginate<TResult>> GetPagingListAsync<TResult>(
+            Expression<Func<T, TResult>> selector,
+            Expression<Func<T, bool>>? predicate = null,
+            Func<IQueryable<T>, IOrderedQueryable<T>>? orderBy = null,
+            Func<IQueryable<T>, IIncludableQueryable<T, object>>? include = null,
+            int page = 1,
+            int size = 10);
         Task<bool> AnyAsync(Expression<Func<T, bool>> predicate);
 
         Task InsertAsync(T entity);

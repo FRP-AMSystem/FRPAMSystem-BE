@@ -613,6 +613,30 @@ PRIMARY KEY CLUSTERED
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
+/****** Object:  Table [dbo].[Notification]    Script Date: 6/7/2026 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Notification](
+	[notification_id] [int] IDENTITY(1,1) NOT NULL,
+	[user_id] [int] NOT NULL,
+	[title] [nvarchar](255) NOT NULL,
+	[message] [nvarchar](max) NOT NULL,
+	[notification_type] [nvarchar](50) NOT NULL,
+	[reference_type] [nvarchar](50) NULL,
+	[reference_id] [int] NULL,
+	[is_read] [bit] NOT NULL,
+	[read_at] [datetime2](7) NULL,
+	[is_deleted] [bit] NOT NULL,
+	[deleted_at] [datetime2](7) NULL,
+	[created_at] [datetime2](7) NOT NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[notification_id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
 ALTER TABLE [dbo].[AllocationEquipmentDetail] ADD  DEFAULT ((0)) FOR [is_substitute]
 GO
 ALTER TABLE [dbo].[AllocationEquipmentDetail] ADD  DEFAULT ((1)) FOR [efficiency_rate]
@@ -684,6 +708,15 @@ GO
 ALTER TABLE [dbo].[Schedule] ADD  DEFAULT (getdate()) FOR [created_at]
 GO
 ALTER TABLE [dbo].[User] ADD  DEFAULT (getdate()) FOR [created_at]
+GO
+ALTER TABLE [dbo].[Notification] ADD  DEFAULT ((0)) FOR [is_read]
+GO
+ALTER TABLE [dbo].[Notification] ADD  DEFAULT ((0)) FOR [is_deleted]
+GO
+ALTER TABLE [dbo].[Notification] ADD  DEFAULT (getdate()) FOR [created_at]
+GO
+CREATE NONCLUSTERED INDEX [IX_Notification_User_IsRead_CreatedAt]
+ON [dbo].[Notification]([user_id] ASC, [is_read] ASC, [created_at] DESC)
 GO
 ALTER TABLE [dbo].[AllocationEquipmentDetail]  WITH CHECK ADD  CONSTRAINT [FK_AllocationEquipmentDetail_AllocatedEquipmentType] FOREIGN KEY([allocated_equipment_type_id])
 REFERENCES [dbo].[EquipmentType] ([equipment_type_id])
@@ -874,6 +907,11 @@ ALTER TABLE [dbo].[PhaseHumanRequirement]  WITH CHECK ADD  CONSTRAINT [FK_PhaseH
 REFERENCES [dbo].[Role] ([role_id])
 GO
 ALTER TABLE [dbo].[PhaseHumanRequirement] CHECK CONSTRAINT [FK_PhaseHumanRequirement_Role]
+GO
+ALTER TABLE [dbo].[Notification]  WITH CHECK ADD  CONSTRAINT [FK_Notification_User] FOREIGN KEY([user_id])
+REFERENCES [dbo].[User] ([user_id])
+GO
+ALTER TABLE [dbo].[Notification] CHECK CONSTRAINT [FK_Notification_User]
 GO
 ALTER TABLE [dbo].[PhaseHumanRequirement]  WITH CHECK ADD  CONSTRAINT [FK_PhaseHumanRequirement_Skill] FOREIGN KEY([required_skill_id])
 REFERENCES [dbo].[Skill] ([skill_id])
