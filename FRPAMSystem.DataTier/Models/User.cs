@@ -31,5 +31,7 @@ public partial class User
 
     public virtual Role Role { get; set; } = null!;
 
+    public virtual ICollection<Notification> Notifications { get; set; } = new List<Notification>();
+
     public virtual ICollection<Schedule> Schedules { get; set; } = new List<Schedule>();
 }
