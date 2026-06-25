@@ -10,6 +10,7 @@
     4. Password      : (lấy từ MonsterASP control panel)
     5. Connect → chọn database [db54885] (không dùng master)
     6. Mở file này → Execute (F5)
+    7. Sau đó chạy SeedData.sql (cùng database db54885)
 
   Lưu ý MonsterASP:
     - Hosting KHÔNG cho phép CREATE / DROP DATABASE
@@ -34,6 +35,8 @@ GO
 -- -----------------------------------------------------------------------------
 -- Drop tables (thứ tự con → cha; MonsterASP không cho DROP DATABASE)
 -- -----------------------------------------------------------------------------
+IF OBJECT_ID(N'[dbo].[Notification]', N'U') IS NOT NULL DROP TABLE [dbo].[Notification];
+GO
 IF OBJECT_ID(N'[dbo].[Schedule]', N'U') IS NOT NULL DROP TABLE [dbo].[Schedule];
 GO
 IF OBJECT_ID(N'[dbo].[EquipmentShortageLog]', N'U') IS NOT NULL DROP TABLE [dbo].[EquipmentShortageLog];
@@ -84,7 +87,7 @@ IF OBJECT_ID(N'[dbo].[Role]', N'U') IS NOT NULL DROP TABLE [dbo].[Role];
 GO
 
 -- -----------------------------------------------------------------------------
--- Create tables
+-- Create tables (đồng bộ từ branch Minh)
 -- -----------------------------------------------------------------------------
 /****** Object:  Table [dbo].[AllocationEquipmentDetail]    Script Date: 6/7/2026 6:52:39 PM ******/
 SET ANSI_NULLS ON
@@ -1076,5 +1079,6 @@ GO
 ALTER TABLE [dbo].[Schedule] CHECK CONSTRAINT [CK_Schedule_Priority]
 GO
 
-PRINT N'Schema ForestryResourcePlanningDB đã được tạo thành công trên db54885.';
+PRINT N'Schema đã được tạo thành công trên db54885.';
+PRINT N'Tiếp theo: chạy SeedData.sql trên cùng database.';
 GO
