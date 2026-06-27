@@ -1,5 +1,7 @@
-﻿using FRPAMSystem.BusinessTier.Services.Implements;
+﻿using FRPAMSystem.BusinessTier.Configuration;
+using FRPAMSystem.BusinessTier.Services.Implements;
 using FRPAMSystem.BusinessTier.Services.Interface;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using System.Reflection;
 
@@ -7,8 +9,12 @@ namespace FRPAMSystem.BusinessTier
 {
     public static class BusinessServiceRegistration
     {
-        public static IServiceCollection AddBusinessServices(this IServiceCollection services)
+        public static IServiceCollection AddBusinessServices(
+            this IServiceCollection services,
+            IConfiguration configuration)
         {
+            services.Configure<EmailSettings>(configuration.GetSection("Email"));
+
             services.AddScoped<IRoleService, RoleService>();
             services.AddScoped<IUserService, UserService>();
             services.AddScoped<IAuthService, AuthService>();
@@ -31,6 +37,8 @@ namespace FRPAMSystem.BusinessTier
             services.AddScoped<IAllocationHumanDetailService, AllocationHumanDetailService>();
             services.AddScoped<IEquipmentShortageLogService, EquipmentShortageLogService>();
             services.AddScoped<IEquipmentSubstitutionService, EquipmentSubstitutionService>();
+            services.AddScoped<IEmailService, EmailService>();
+            services.AddScoped<INotificationService, NotificationService>();
             return services;
         }
     }

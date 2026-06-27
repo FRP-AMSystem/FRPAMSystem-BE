@@ -19,7 +19,7 @@ builder.Services.AddConfigSwagger();
 builder.Services.AddJwtValidation(builder.Configuration);
 
 builder.Services.AddDataServices(builder.Configuration);
-builder.Services.AddBusinessServices();
+builder.Services.AddBusinessServices(builder.Configuration);
 
 builder.Services.AddCors(options =>
 {
