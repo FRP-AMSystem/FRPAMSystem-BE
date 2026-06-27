@@ -71,6 +71,31 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 request.Subject);
         }
 
+        public async Task SendTestAsync(TestEmailRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.ToEmail))
+            {
+                throw new Exception("Recipient email is required.");
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Message))
+            {
+                throw new Exception("Email message is required.");
+            }
+
+            if (!_settings.Enabled)
+            {
+                throw new Exception("Email sending is disabled. Set Email:Enabled to true in appsettings.");
+            }
+
+            await SendAsync(new SendEmailRequest
+            {
+                ToEmail = request.ToEmail.Trim(),
+                Subject = "FRPAM System - Test Email",
+                Body = request.Message.Trim()
+            });
+        }
+
         private void ValidateSmtpSettings()
         {
             if (string.IsNullOrWhiteSpace(_settings.SmtpHost))
