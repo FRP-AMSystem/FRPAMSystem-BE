@@ -8,7 +8,6 @@ namespace FRPAMSystem.BusinessTier.Enums
 {
     public enum AllocationPlanStatus
     {
-        Generated,
         Pending,
         Approved,
         Rejected
