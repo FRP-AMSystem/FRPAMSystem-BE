@@ -37,6 +37,7 @@ namespace FRPAMSystem.BusinessTier
             services.AddScoped<IAllocationHumanDetailService, AllocationHumanDetailService>();
             services.AddScoped<IEquipmentShortageLogService, EquipmentShortageLogService>();
             services.AddScoped<IEquipmentSubstitutionService, EquipmentSubstitutionService>();
+            services.AddScoped<IScheduleService, ScheduleService>();
             services.AddScoped<IEmailService, EmailService>();
             services.AddScoped<INotificationService, NotificationService>();
             return services;
