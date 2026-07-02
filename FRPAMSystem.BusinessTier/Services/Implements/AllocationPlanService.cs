@@ -329,11 +329,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 throw new Exception("Allocation plan is already approved.");
             }
 
-            if (currentStatus == AllocationPlanStatus.Cancelled)
-            {
-                throw new Exception("Cancelled allocation plan cannot be approved.");
-            }
-
             allocationPlan.ApproveStatus = AllocationPlanStatus.Approved.ToString();
             allocationPlan.ApproveBy = currentUserId.Value;
             allocationPlan.ApprovedAt = DateTime.Now;
@@ -389,11 +384,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 throw new Exception("Approved allocation plan cannot be rejected.");
             }
 
-            if (currentStatus == AllocationPlanStatus.Cancelled)
-            {
-                throw new Exception("Cancelled allocation plan cannot be rejected.");
-            }
-
             allocationPlan.ApproveStatus = AllocationPlanStatus.Rejected.ToString();
             allocationPlan.ApproveBy = currentUserId.Value;
             allocationPlan.ApprovedAt = null;
@@ -442,7 +432,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 throw new Exception("Approved allocation plan cannot be cancelled.");
             }
 
-            allocationPlan.ApproveStatus = AllocationPlanStatus.Cancelled.ToString();
+            allocationPlan.ApproveStatus = AllocationPlanStatus.Rejected.ToString();
             allocationPlan.ApprovedAt = null;
             allocationPlan.UpdatedAt = DateTime.Now;
 
