@@ -18,6 +18,6 @@ namespace FRPAMSystem.BusinessTier.Payload.Experiment
 
         public int Priority { get; set; } = 2;
 
-        public ExperimentStatus Status { get; set; } = ExperimentStatus.Draft;
+        public ExperimentStatus Status { get; set; } = ExperimentStatus.Submitted;
     }
 }
