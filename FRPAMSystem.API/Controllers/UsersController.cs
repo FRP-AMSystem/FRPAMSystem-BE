@@ -54,6 +54,7 @@ namespace FRPAMSystem_BE.Controllers
         }
 
         [HttpPost]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> CreateUser([FromBody] CreateUserRequest request)
         {
             var result = await _userService.CreateUserAsync(request);
@@ -65,6 +66,52 @@ namespace FRPAMSystem_BE.Controllers
                 data = result
             });
         }
+
+        [HttpPut("{id:int}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> UpdateUser(int id, [FromBody] UpdateUserRequest request)
+        {
+            var result = await _userService.UpdateUserAsync(id, request);
+
+            if (result == null)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "User not found"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "Update user successfully",
+                data = result
+            });
+        }
+
+        [HttpDelete("{id:int}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> DeleteUser(int id)
+        {
+            var result = await _userService.DeleteUserAsync(id);
+
+            if (!result)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "User not found"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "Delete user successfully"
+            });
+        }
+
         [HttpGet("me")]
         public IActionResult GetCurrentUser()
         {
