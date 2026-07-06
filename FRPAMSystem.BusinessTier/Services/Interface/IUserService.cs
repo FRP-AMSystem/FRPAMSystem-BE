@@ -1,9 +1,4 @@
 ﻿using FRPAMSystem.BusinessTier.Payload.Users;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace FRPAMSystem.BusinessTier.Services.Interface
 {
@@ -14,5 +9,9 @@ namespace FRPAMSystem.BusinessTier.Services.Interface
         Task<UserResponse?> GetUserByIdAsync(int id);
 
         Task<UserResponse> CreateUserAsync(CreateUserRequest request);
+
+        Task<UserResponse?> UpdateUserAsync(int id, UpdateUserRequest request);
+
+        Task<bool> DeleteUserAsync(int id);
     }
 }
