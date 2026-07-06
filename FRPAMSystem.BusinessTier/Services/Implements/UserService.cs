@@ -3,11 +3,6 @@ using FRPAMSystem.BusinessTier.Services.Interface;
 using FRPAMSystem.DataTier.Models;
 using FRPAMSystem.DataTier.Repository.Interfaces;
 using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace FRPAMSystem.BusinessTier.Services.Implements
 {
@@ -29,15 +24,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                     orderBy: x => Queryable.OrderBy<User, int>(x, u => u.UserId)
                 );
 
-            return users.Select(u => new UserResponse
-            {
-                UserId = u.UserId,
-                FullName = u.FullName,
-                Username = u.Username,
-                Email = u.Email,
-                RoleId = u.RoleId,
-                RoleName = u.Role.RoleName
-            }).ToList();
+            return users.Select(MapToResponse).ToList();
         }
 
         public async Task<UserResponse?> GetUserByIdAsync(int id)
@@ -49,56 +36,24 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                     include: x => x.Include(u => u.Role)
                 );
 
-            if (user == null)
-            {
-                return null;
-            }
-
-            return new UserResponse
-            {
-                UserId = user.UserId,
-                FullName = user.FullName,
-                Username = user.Username,
-                Email = user.Email,
-                RoleId = user.RoleId,
-                RoleName = user.Role.RoleName
-            };
+            return user == null ? null : MapToResponse(user);
         }
 
         public async Task<UserResponse> CreateUserAsync(CreateUserRequest request)
         {
-            var roleExists = await _unitOfWork
-                .GetRepository<Role>()
-                .AnyAsync(r => r.RoleId == request.RoleId);
-
-            if (!roleExists)
-            {
-                throw new Exception("Role does not exist.");
-            }
-
-            var usernameExists = await _unitOfWork
-                .GetRepository<User>()
-                .AnyAsync(u => u.Username == request.Username);
-
-            if (usernameExists)
-            {
-                throw new Exception("Username already exists.");
-            }
-
-            var emailExists = await _unitOfWork
-                .GetRepository<User>()
-                .AnyAsync(u => u.Email == request.Email);
-
-            if (emailExists)
-            {
-                throw new Exception("Email already exists.");
-            }
+            await ValidateUserRequestAsync(
+                request.FullName,
+                request.Username,
+                request.Email,
+                request.RoleId,
+                request.Password,
+                isPasswordRequired: true);
 
             var user = new User
             {
-                FullName = request.FullName,
-                Username = request.Username,
-                Email = request.Email,
+                FullName = request.FullName.Trim(),
+                Username = request.Username.Trim(),
+                Email = request.Email.Trim(),
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
                 RoleId = request.RoleId,
                 CreatedAt = DateTime.Now
@@ -107,10 +62,160 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             await _unitOfWork.GetRepository<User>().InsertAsync(user);
             await _unitOfWork.CommitAsync();
 
-            var role = await _unitOfWork
-                .GetRepository<Role>()
-                .FirstOrDefaultAsync(predicate: r => r.RoleId == user.RoleId);
+            return (await GetUserByIdAsync(user.UserId))!;
+        }
 
+        public async Task<UserResponse?> UpdateUserAsync(int id, UpdateUserRequest request)
+        {
+            await ValidateUserRequestAsync(
+                request.FullName,
+                request.Username,
+                request.Email,
+                request.RoleId,
+                request.Password,
+                isPasswordRequired: false,
+                excludeUserId: id);
+
+            var user = await _unitOfWork
+                .GetRepository<User>()
+                .FirstOrDefaultAsync(
+                    predicate: u => u.UserId == id,
+                    asNoTracking: false
+                );
+
+            if (user == null)
+            {
+                return null;
+            }
+
+            user.FullName = request.FullName.Trim();
+            user.Username = request.Username.Trim();
+            user.Email = request.Email.Trim();
+            user.RoleId = request.RoleId;
+            user.UpdatedAt = DateTime.Now;
+
+            if (!string.IsNullOrWhiteSpace(request.Password))
+            {
+                user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
+            }
+
+            _unitOfWork.GetRepository<User>().Update(user);
+            await _unitOfWork.CommitAsync();
+
+            return await GetUserByIdAsync(user.UserId);
+        }
+
+        public async Task<bool> DeleteUserAsync(int id)
+        {
+            var user = await _unitOfWork
+                .GetRepository<User>()
+                .FirstOrDefaultAsync(
+                    predicate: u => u.UserId == id,
+                    asNoTracking: false
+                );
+
+            if (user == null)
+            {
+                return false;
+            }
+
+            if (await _unitOfWork.GetRepository<AllocationPlan>().AnyAsync(p => p.CreatedBy == id))
+            {
+                throw new Exception("Cannot delete user because they created allocation plans.");
+            }
+
+            if (await _unitOfWork.GetRepository<AllocationPlan>().AnyAsync(p => p.ApproveBy == id))
+            {
+                throw new Exception("Cannot delete user because they approved allocation plans.");
+            }
+
+            if (await _unitOfWork.GetRepository<Experiment>().AnyAsync(e => e.ResearcherId == id))
+            {
+                throw new Exception("Cannot delete user because they are assigned as a researcher.");
+            }
+
+            if (await _unitOfWork.GetRepository<HumanResourceProfile>().AnyAsync(h => h.UserId == id))
+            {
+                throw new Exception("Cannot delete user because they have a human resource profile.");
+            }
+
+            if (await _unitOfWork.GetRepository<Notification>().AnyAsync(n => n.UserId == id))
+            {
+                throw new Exception("Cannot delete user because they have notifications.");
+            }
+
+            if (await _unitOfWork.GetRepository<Schedule>().AnyAsync(s => s.CreatedBy == id))
+            {
+                throw new Exception("Cannot delete user because they created schedules.");
+            }
+
+            _unitOfWork.GetRepository<User>().Delete(user);
+            await _unitOfWork.CommitAsync();
+
+            return true;
+        }
+
+        private async Task ValidateUserRequestAsync(
+            string fullName,
+            string username,
+            string email,
+            int roleId,
+            string? password,
+            bool isPasswordRequired,
+            int? excludeUserId = null)
+        {
+            if (string.IsNullOrWhiteSpace(fullName))
+            {
+                throw new Exception("Full name is required.");
+            }
+
+            if (string.IsNullOrWhiteSpace(username))
+            {
+                throw new Exception("Username is required.");
+            }
+
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                throw new Exception("Email is required.");
+            }
+
+            if (isPasswordRequired && string.IsNullOrWhiteSpace(password))
+            {
+                throw new Exception("Password is required.");
+            }
+
+            var roleExists = await _unitOfWork
+                .GetRepository<Role>()
+                .AnyAsync(r => r.RoleId == roleId);
+
+            if (!roleExists)
+            {
+                throw new Exception("Role does not exist.");
+            }
+
+            var usernameExists = await _unitOfWork
+                .GetRepository<User>()
+                .AnyAsync(u => u.Username == username.Trim()
+                    && (!excludeUserId.HasValue || u.UserId != excludeUserId.Value));
+
+            if (usernameExists)
+            {
+                throw new Exception("Username already exists.");
+            }
+
+            var emailExists = await _unitOfWork
+                .GetRepository<User>()
+                .AnyAsync(u => u.Email == email.Trim()
+                    && (!excludeUserId.HasValue || u.UserId != excludeUserId.Value));
+
+            if (emailExists)
+            {
+                throw new Exception("Email already exists.");
+            }
+        }
+
+        private static UserResponse MapToResponse(User user)
+        {
             return new UserResponse
             {
                 UserId = user.UserId,
@@ -118,7 +223,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 Username = user.Username,
                 Email = user.Email,
                 RoleId = user.RoleId,
-                RoleName = role?.RoleName
+                RoleName = user.Role?.RoleName
             };
         }
     }
