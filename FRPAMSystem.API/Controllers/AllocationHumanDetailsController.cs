@@ -59,7 +59,7 @@ namespace FRPAMSystem_BE.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "Admin,Manager")]
+        [Authorize(Roles = "Admin,Manager,Researcher")]
         public async Task<IActionResult> CreateAllocationHumanDetail(
             [FromBody] AllocationHumanDetailRequest request)
         {
@@ -75,7 +75,7 @@ namespace FRPAMSystem_BE.Controllers
         }
 
         [HttpPut("{id:int}")]
-        [Authorize(Roles = "Admin,Manager")]
+        [Authorize(Roles = "Admin,Manager,Researcher")]
         public async Task<IActionResult> UpdateAllocationHumanDetail(
             int id,
             [FromBody] AllocationHumanDetailRequest request)

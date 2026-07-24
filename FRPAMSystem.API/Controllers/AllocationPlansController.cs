@@ -76,7 +76,7 @@ namespace FRPAMSystem_BE.Controllers
         }
 
         [HttpPut("{id:int}")]
-        [Authorize(Roles = "Admin,Manager")]
+        [Authorize(Roles = "Admin,Manager,Researcher")]
         public async Task<IActionResult> UpdateAllocationPlan(
             int id,
             [FromBody] AllocationPlanRequest request)
