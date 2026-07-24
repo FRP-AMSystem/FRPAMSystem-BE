@@ -59,7 +59,7 @@ namespace FRPAMSystem_BE.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "Admin,Manager")]
+        [Authorize(Roles = "Admin,Manager,Researcher")]
         public async Task<IActionResult> CreateAllocationLandDetail(
             [FromBody] AllocationLandDetailRequest request)
         {
@@ -75,7 +75,7 @@ namespace FRPAMSystem_BE.Controllers
         }
 
         [HttpPut("{id:int}")]
-        [Authorize(Roles = "Admin,Manager")]
+        [Authorize(Roles = "Admin,Manager,Researcher")]
         public async Task<IActionResult> UpdateAllocationLandDetail(
             int id,
             [FromBody] AllocationLandDetailRequest request)
