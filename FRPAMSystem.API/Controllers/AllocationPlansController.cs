@@ -60,7 +60,7 @@ namespace FRPAMSystem_BE.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "Admin,Manager")]
+        [Authorize(Roles = "Admin,Manager,Researcher")]
         public async Task<IActionResult> CreateAllocationPlan(
             [FromBody] AllocationPlanRequest request)
         {

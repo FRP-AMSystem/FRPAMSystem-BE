@@ -470,10 +470,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 throw new Exception("Approved allocation plan cannot be modified.");
             }
 
-            if (status == AllocationPlanStatus.Cancelled)
-            {
-                throw new Exception("Cancelled allocation plan cannot be modified.");
-            }
         }
 
         private async Task<RequirementInfo> GetAndValidateRequirementInfoAsync(
@@ -590,7 +586,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             var cancelledDetailStatus = AllocationDetailStatus.Cancelled.ToString();
             var completedDetailStatus = AllocationDetailStatus.Completed.ToString();
             var rejectedPlanStatus = AllocationPlanStatus.Rejected.ToString();
-            var cancelledPlanStatus = AllocationPlanStatus.Cancelled.ToString();
 
             var overlappedWorkingHours = await _unitOfWork
                 .GetRepository<AllocationHumanDetail>()
@@ -602,7 +597,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                     d.Status != cancelledDetailStatus &&
                     d.Status != completedDetailStatus &&
                     d.AllocationPlan.ApproveStatus != rejectedPlanStatus &&
-                    d.AllocationPlan.ApproveStatus != cancelledPlanStatus &&
                     d.StartDate < endDate &&
                     startDate < d.EndDate)
                 .SumAsync(d => d.WorkingHours);

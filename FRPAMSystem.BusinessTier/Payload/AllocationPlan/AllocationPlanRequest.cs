@@ -13,6 +13,6 @@ namespace FRPAMSystem.BusinessTier.Payload.AllocationPlan
 
         public double? FitnessScore { get; set; }
 
-        public AllocationPlanStatus ApproveStatus { get; set; } = AllocationPlanStatus.Draft;
+        public AllocationPlanStatus ApproveStatus { get; set; } = AllocationPlanStatus.Pending;
     }
 }
