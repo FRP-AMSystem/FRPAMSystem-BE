@@ -25,6 +25,8 @@ namespace FRPAMSystem.BusinessTier
             services.AddScoped<IEquipmentInstanceService, EquipmentInstanceService>();
             services.AddScoped<IExperimentService, ExperimentService>();
             services.AddScoped<IExperimentPhaseService, ExperimentPhaseService>();
+            services.AddScoped<IPhaseEquipmentRequirementService, PhaseEquipmentRequirementService>();
+            services.AddScoped<IPhaseHumanRequirementService, PhaseHumanRequirementService>();
             services.AddScoped<ILandResourceService, LandResourceService>();
             services.AddScoped<IExperimentLandRequirementService, ExperimentLandRequirementService>();
             services.AddScoped<IExperimentEquipmentRequirementService, ExperimentEquipmentRequirementService>();
