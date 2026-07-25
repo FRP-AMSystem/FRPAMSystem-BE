@@ -27,6 +27,9 @@ namespace FRPAMSystem.BusinessTier.Services.Interface
 
         Task<bool> DeleteAllocationPlanAsync(int id);
 
+        Task<AllocationPlanResponse?> SubmitAllocationPlanAsync(
+            int id);
+
         Task<AllocationPlanResponse?> ApproveAllocationPlanAsync(
             int id,
             int? currentUserId);
