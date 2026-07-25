@@ -291,6 +291,53 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             return true;
         }
 
+        public async Task<AllocationPlanResponse?> SubmitAllocationPlanAsync(int id)
+        {
+            var allocationPlan = await _unitOfWork
+                .GetRepository<AllocationPlan>()
+                .FirstOrDefaultAsync(
+                    predicate: p => p.AllocationPlanId == id,
+                    asNoTracking: false
+                );
+
+            if (allocationPlan == null)
+            {
+                return null;
+            }
+
+            var currentStatus = EnumHelper.ParseEnum<AllocationPlanStatus>(
+                allocationPlan.ApproveStatus);
+
+            if (currentStatus == AllocationPlanStatus.Approved)
+            {
+                throw new Exception("Approved allocation plan cannot be submitted.");
+            }
+
+            allocationPlan.ApproveStatus = AllocationPlanStatus.Pending.ToString();
+            allocationPlan.ApproveBy = null;
+            allocationPlan.ApprovedAt = null;
+            allocationPlan.UpdatedAt = DateTime.Now;
+
+            _unitOfWork.GetRepository<AllocationPlan>().Update(allocationPlan);
+            await _unitOfWork.CommitAsync();
+
+            var submitted = await _unitOfWork
+                .GetRepository<AllocationPlan>()
+                .FirstOrDefaultAsync(
+                    predicate: p => p.AllocationPlanId == id,
+                    include: query => query
+                        .Include(p => p.Experiment)
+                        .Include(p => p.CreatedByNavigation)
+                        .Include(p => p.ApproveByNavigation)
+                        .Include(p => p.AllocationLandDetails)
+                        .Include(p => p.AllocationEquipmentDetails)
+                        .Include(p => p.AllocationHumanDetails)
+                        .Include(p => p.Schedules)
+                );
+
+            return MapToResponse(submitted!);
+        }
+
         public async Task<AllocationPlanResponse?> ApproveAllocationPlanAsync(
             int id,
             int? currentUserId)
