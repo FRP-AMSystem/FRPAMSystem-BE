@@ -124,6 +124,30 @@ namespace FRPAMSystem_BE.Controllers
             });
         }
 
+        [HttpPost("{id:int}/submit")]
+        [Authorize(Roles = "Admin,Manager,Researcher")]
+        public async Task<IActionResult> SubmitAllocationPlan(int id)
+        {
+            var result = await _allocationPlanService
+                .SubmitAllocationPlanAsync(id);
+
+            if (result == null)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "Allocation plan not found"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "Submit allocation plan successfully",
+                data = result
+            });
+        }
+
         [HttpPost("{id:int}/approve")]
         [Authorize(Roles = "Admin,Manager")]
         public async Task<IActionResult> ApproveAllocationPlan(int id)
