@@ -60,7 +60,7 @@ namespace FRPAMSystem_BE.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "Admin,Manager")]
+        [Authorize(Roles = "Admin,Manager,Researcher")]
         public async Task<IActionResult> CreateAllocationPlan(
             [FromBody] AllocationPlanRequest request)
         {
@@ -76,7 +76,7 @@ namespace FRPAMSystem_BE.Controllers
         }
 
         [HttpPut("{id:int}")]
-        [Authorize(Roles = "Admin,Manager")]
+        [Authorize(Roles = "Admin,Manager,Researcher")]
         public async Task<IActionResult> UpdateAllocationPlan(
             int id,
             [FromBody] AllocationPlanRequest request)
@@ -121,6 +121,30 @@ namespace FRPAMSystem_BE.Controllers
             {
                 success = true,
                 message = "Delete allocation plan successfully"
+            });
+        }
+
+        [HttpPost("{id:int}/submit")]
+        [Authorize(Roles = "Admin,Manager,Researcher")]
+        public async Task<IActionResult> SubmitAllocationPlan(int id)
+        {
+            var result = await _allocationPlanService
+                .SubmitAllocationPlanAsync(id);
+
+            if (result == null)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "Allocation plan not found"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "Submit allocation plan successfully",
+                data = result
             });
         }
 

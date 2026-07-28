@@ -92,6 +92,29 @@ namespace FRPAMSystem_BE.Controllers
             });
         }
 
+        [HttpPost("{id:int}/submit")]
+        [Authorize(Roles = "Admin,Manager,Researcher")]
+        public async Task<IActionResult> SubmitExperiment(int id)
+        {
+            var result = await _experimentService.SubmitExperimentAsync(id);
+
+            if (result == null)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "Experiment not found"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "Submit experiment successfully",
+                data = result
+            });
+        }
+
         [HttpDelete("{id:int}")]
         [Authorize(Roles = "Admin,Manager")]
         public async Task<IActionResult> DeleteExperiment(int id)
