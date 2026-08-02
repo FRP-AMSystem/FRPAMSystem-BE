@@ -52,9 +52,13 @@ namespace FRPAMSystem.BusinessTier.AI.Services
                     .Take(input.Settings.EliteCount)
                     .Select(c => c.Clone())
                     .ToList();
+                var fingerprints = nextGeneration.Select(CreateFingerprint).ToHashSet();
+                var reproductionAttempts = 0;
 
-                while (nextGeneration.Count < input.Settings.PopulationSize)
+                while (nextGeneration.Count < input.Settings.PopulationSize &&
+                       reproductionAttempts < input.Settings.PopulationSize * 5)
                 {
+                    reproductionAttempts++;
                     var firstParent = _selectionOperator.Select(ordered, input.Settings);
                     var secondParent = _selectionOperator.Select(ordered, input.Settings);
                     var (firstChild, secondChild) = _crossoverOperator.Crossover(firstParent, secondParent, input.Settings);
@@ -62,10 +66,31 @@ namespace FRPAMSystem.BusinessTier.AI.Services
                     _mutationOperator.Mutate(firstChild, input, generation);
                     _mutationOperator.Mutate(secondChild, input, generation);
 
-                    nextGeneration.Add(firstChild);
-                    if (nextGeneration.Count < input.Settings.PopulationSize)
+                    AddIfUnique(nextGeneration, fingerprints, firstChild, input.Settings.PopulationSize);
+                    AddIfUnique(nextGeneration, fingerprints, secondChild, input.Settings.PopulationSize);
+                }
+
+                while (nextGeneration.Count < input.Settings.PopulationSize)
+                {
+                    var parent = _selectionOperator.Select(ordered, input.Settings);
+                    _mutationOperator.Mutate(parent, input, generation);
+                    nextGeneration.Add(parent);
+                }
+
+                static void AddIfUnique(
+                    ICollection<AllocationChromosome> nextGeneration,
+                    ISet<string> fingerprints,
+                    AllocationChromosome child,
+                    int populationSize)
+                {
+                    if (nextGeneration.Count >= populationSize)
                     {
-                        nextGeneration.Add(secondChild);
+                        return;
+                    }
+
+                    if (fingerprints.Add(CreateFingerprint(child)))
+                    {
+                        nextGeneration.Add(child);
                     }
                 }
 
@@ -103,8 +128,30 @@ namespace FRPAMSystem.BusinessTier.AI.Services
                 Rank = rank,
                 FitnessScore = Math.Round(chromosome.FitnessScore, 2),
                 PenaltyScore = Math.Round(chromosome.PenaltyScore, 2),
+                BonusScore = Math.Round(chromosome.BonusScore, 2),
                 ConflictCount = chromosome.ConflictCount,
                 EstimatedCompletionTime = chromosome.Genes.Select(g => g.EndDate).DefaultIfEmpty(input.Experiment.ExpectEndDate).Max(),
+                FitnessBreakdown = new FitnessBreakdownDTO
+                {
+                    LandScore = Math.Round(chromosome.FitnessBreakdown.LandScore, 2),
+                    HumanScore = Math.Round(chromosome.FitnessBreakdown.HumanScore, 2),
+                    EquipmentScore = Math.Round(chromosome.FitnessBreakdown.EquipmentScore, 2),
+                    ScheduleScore = Math.Round(chromosome.FitnessBreakdown.ScheduleScore, 2),
+                    PenaltyScore = Math.Round(chromosome.FitnessBreakdown.PenaltyScore, 2),
+                    BonusScore = Math.Round(chromosome.FitnessBreakdown.BonusScore, 2),
+                    FinalScore = Math.Round(chromosome.FitnessBreakdown.FinalScore, 2)
+                },
+                ConstraintReport = new ConstraintReportDTO
+                {
+                    LandConflicts = chromosome.ConstraintReport.LandConflicts.Distinct().ToList(),
+                    HumanConflicts = chromosome.ConstraintReport.HumanConflicts.Distinct().ToList(),
+                    EquipmentConflicts = chromosome.ConstraintReport.EquipmentConflicts.Distinct().ToList(),
+                    ScheduleConflicts = chromosome.ConstraintReport.ScheduleConflicts.Distinct().ToList(),
+                    MaintenanceConflicts = chromosome.ConstraintReport.MaintenanceConflicts.Distinct().ToList(),
+                    SkillConflicts = chromosome.ConstraintReport.SkillConflicts.Distinct().ToList(),
+                    RoleConflicts = chromosome.ConstraintReport.RoleConflicts.Distinct().ToList(),
+                    DeadlineConflicts = chromosome.ConstraintReport.DeadlineConflicts.Distinct().ToList()
+                },
                 Advantages = chromosome.Advantages.Distinct().Take(5).ToList(),
                 Disadvantages = chromosome.Disadvantages.Distinct().Take(8).ToList()
             };
@@ -191,6 +238,16 @@ namespace FRPAMSystem.BusinessTier.AI.Services
             }
 
             return suggestion;
+        }
+
+        private static string CreateFingerprint(AllocationChromosome chromosome)
+        {
+            return string.Join('|', chromosome.Genes
+                .OrderBy(g => g.PhaseId)
+                .Select(g =>
+                    $"{g.PhaseId}:{g.LandId}:{g.StartDate:yyyyMMdd}:{g.EndDate:yyyyMMdd}:" +
+                    $"{string.Join(',', g.AssignedHumanResourceIds.OrderBy(id => id))}:" +
+                    $"{string.Join(',', g.EquipmentAssignments.Select(e => e.EquipmentInstanceId).OrderBy(id => id))}"));
         }
     }
 }
