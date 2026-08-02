@@ -8,6 +8,12 @@ namespace FRPAMSystem.BusinessTier.AI.DTO
 
         public double PenaltyScore { get; set; }
 
+        public double BonusScore { get; set; }
+
+        public FitnessBreakdownDTO FitnessBreakdown { get; set; } = new();
+
+        public ConstraintReportDTO ConstraintReport { get; set; } = new();
+
         public int ConflictCount { get; set; }
 
         public DateTime EstimatedCompletionTime { get; set; }
@@ -23,6 +29,42 @@ namespace FRPAMSystem.BusinessTier.AI.DTO
         public List<string> Advantages { get; set; } = new();
 
         public List<string> Disadvantages { get; set; } = new();
+    }
+
+    public class FitnessBreakdownDTO
+    {
+        public double LandScore { get; set; }
+
+        public double HumanScore { get; set; }
+
+        public double EquipmentScore { get; set; }
+
+        public double ScheduleScore { get; set; }
+
+        public double PenaltyScore { get; set; }
+
+        public double BonusScore { get; set; }
+
+        public double FinalScore { get; set; }
+    }
+
+    public class ConstraintReportDTO
+    {
+        public List<string> LandConflicts { get; set; } = new();
+
+        public List<string> HumanConflicts { get; set; } = new();
+
+        public List<string> EquipmentConflicts { get; set; } = new();
+
+        public List<string> ScheduleConflicts { get; set; } = new();
+
+        public List<string> MaintenanceConflicts { get; set; } = new();
+
+        public List<string> SkillConflicts { get; set; } = new();
+
+        public List<string> RoleConflicts { get; set; } = new();
+
+        public List<string> DeadlineConflicts { get; set; } = new();
     }
 
     public class AllocatedLandDTO
