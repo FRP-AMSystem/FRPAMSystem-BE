@@ -12,8 +12,26 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
             input.Settings.Normalize();
             var population = new Population();
             var phases = input.ExperimentPhases.OrderBy(p => p.PhaseOrder).ToList();
+            var fingerprints = new HashSet<string>();
 
-            for (var i = 0; i < input.Settings.PopulationSize; i++)
+            var attempts = 0;
+            while (population.Chromosomes.Count < input.Settings.PopulationSize &&
+                   attempts < input.Settings.PopulationSize * 5)
+            {
+                attempts++;
+                var chromosome = new AllocationChromosome
+                {
+                    Genes = phases.Select(p => GenerateGene(p.PhaseId, input)).ToList()
+                };
+
+                if (fingerprints.Add(CreateFingerprint(chromosome)) ||
+                    population.Chromosomes.Count < Math.Max(1, input.Settings.PopulationSize / 4))
+                {
+                    population.Chromosomes.Add(chromosome);
+                }
+            }
+
+            while (population.Chromosomes.Count < input.Settings.PopulationSize)
             {
                 population.Chromosomes.Add(new AllocationChromosome
                 {
@@ -313,6 +331,16 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
         private static bool Overlaps(DateTime startA, DateTime endA, DateTime startB, DateTime endB)
         {
             return startA <= endB && startB <= endA;
+        }
+
+        private static string CreateFingerprint(AllocationChromosome chromosome)
+        {
+            return string.Join('|', chromosome.Genes
+                .OrderBy(g => g.PhaseId)
+                .Select(g =>
+                    $"{g.PhaseId}:{g.LandId}:{g.StartDate:yyyyMMdd}:{g.EndDate:yyyyMMdd}:" +
+                    $"{string.Join(',', g.AssignedHumanResourceIds.OrderBy(id => id))}:" +
+                    $"{string.Join(',', g.EquipmentAssignments.Select(e => e.EquipmentInstanceId).OrderBy(id => id))}"));
         }
 
         private sealed record HumanRequirementSnapshot(

@@ -23,7 +23,9 @@ namespace FRPAMSystem.BusinessTier.AI.Operators.Mutation
             var progress = input.Settings.GenerationCount <= 1
                 ? 1d
                 : (double)generationIndex / input.Settings.GenerationCount;
-            var adaptiveRate = Math.Clamp(input.Settings.MutationRate * (1.5d - progress), 0.001d, 0.8d);
+            var adaptiveRate = input.Settings.InitialMutationRate -
+                               ((input.Settings.InitialMutationRate - input.Settings.FinalMutationRate) * progress);
+            adaptiveRate = Math.Clamp(adaptiveRate, input.Settings.FinalMutationRate, input.Settings.InitialMutationRate);
 
             for (var i = 0; i < chromosome.Genes.Count; i++)
             {
