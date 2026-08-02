@@ -1,4 +1,5 @@
 using FRPAMSystem.BusinessTier.AI.Fitness;
+using FRPAMSystem.BusinessTier.AI.Fitness.Evaluators;
 using FRPAMSystem.BusinessTier.AI.Generator;
 using FRPAMSystem.BusinessTier.AI.Operators.Crossover;
 using FRPAMSystem.BusinessTier.AI.Operators.Mutation;
@@ -48,6 +49,11 @@ namespace FRPAMSystem.BusinessTier
             services.AddScoped<IEmailService, EmailService>();
             services.AddScoped<INotificationService, NotificationService>();
 
+            services.AddScoped<IConstraintEvaluator, LandConstraintEvaluator>();
+            services.AddScoped<IConstraintEvaluator, HumanConstraintEvaluator>();
+            services.AddScoped<IConstraintEvaluator, EquipmentConstraintEvaluator>();
+            services.AddScoped<IConstraintEvaluator, MaintenanceConstraintEvaluator>();
+            services.AddScoped<IConstraintEvaluator, ScheduleConstraintEvaluator>();
             services.AddScoped<IFitnessCalculator, FitnessCalculator>();
             services.AddScoped<IPopulationGenerator, PopulationGenerator>();
             services.AddScoped<ISelectionOperator, TournamentSelectionOperator>();
