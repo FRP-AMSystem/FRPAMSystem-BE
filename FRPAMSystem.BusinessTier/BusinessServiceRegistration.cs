@@ -6,8 +6,13 @@ using FRPAMSystem.BusinessTier.AI.Operators.Mutation;
 using FRPAMSystem.BusinessTier.AI.Operators.Selection;
 using FRPAMSystem.BusinessTier.AI.Services;
 using FRPAMSystem.BusinessTier.Configuration;
+using FRPAMSystem.BusinessTier.DomainEvents;
+using FRPAMSystem.BusinessTier.DomainEvents.Dispatcher;
+using FRPAMSystem.BusinessTier.DomainEvents.Handlers;
 using FRPAMSystem.BusinessTier.Services.Implements;
 using FRPAMSystem.BusinessTier.Services.Interface;
+using FRPAMSystem.BusinessTier.SignalR;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -48,6 +53,14 @@ namespace FRPAMSystem.BusinessTier
             services.AddScoped<IScheduleService, ScheduleService>();
             services.AddScoped<IEmailService, EmailService>();
             services.AddScoped<INotificationService, NotificationService>();
+            services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
+            services.AddScoped<IDomainEventHandler, ExperimentCreatedHandler>();
+            services.AddScoped<IDomainEventHandler, ExperimentSubmittedHandler>();
+            services.AddScoped<IDomainEventHandler, AllocationPlanGeneratedHandler>();
+            services.AddScoped<IDomainEventHandler, AllocationPlanSubmittedHandler>();
+            services.AddScoped<IDomainEventHandler, AllocationPlanApprovedHandler>();
+            services.AddScoped<IDomainEventHandler, AllocationPlanRejectedHandler>();
+            services.AddSingleton<IUserIdProvider, NameIdentifierUserIdProvider>();
 
             services.AddScoped<IConstraintEvaluator, LandConstraintEvaluator>();
             services.AddScoped<IConstraintEvaluator, HumanConstraintEvaluator>();
