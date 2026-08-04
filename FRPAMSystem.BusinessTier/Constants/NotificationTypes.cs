@@ -5,8 +5,14 @@ namespace FRPAMSystem.BusinessTier.Constants
     /// </summary>
     public static class NotificationTypes
     {
+        public const string ExperimentCreated = "ExperimentCreated";
+        public const string ExperimentSubmitted = "ExperimentSubmitted";
         public const string ExperimentApproved = "ExperimentApproved";
         public const string ExperimentPending = "ExperimentPending";
+        public const string AllocationPlanGenerated = "AllocationPlanGenerated";
+        public const string AllocationPlanSubmitted = "AllocationPlanSubmitted";
+        public const string AllocationPlanApproved = "AllocationPlanApproved";
+        public const string AllocationPlanRejected = "AllocationPlanRejected";
         public const string ConflictDetected = "ConflictDetected";
         public const string ScheduleAssigned = "ScheduleAssigned";
     }

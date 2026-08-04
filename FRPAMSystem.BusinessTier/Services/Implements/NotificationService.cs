@@ -2,9 +2,11 @@ using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.Payload.Email;
 using FRPAMSystem.BusinessTier.Payload.Notification;
 using FRPAMSystem.BusinessTier.Services.Interface;
+using FRPAMSystem.BusinessTier.SignalR;
 using FRPAMSystem.DataTier.Models;
 using FRPAMSystem.DataTier.Paginate;
 using FRPAMSystem.DataTier.Repository.Interfaces;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -14,15 +16,18 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly IEmailService _emailService;
+        private readonly IHubContext<NotificationHub, INotificationClient> _notificationHub;
         private readonly ILogger<NotificationService> _logger;
 
         public NotificationService(
             IUnitOfWork unitOfWork,
             IEmailService emailService,
+            IHubContext<NotificationHub, INotificationClient> notificationHub,
             ILogger<NotificationService> logger)
         {
             _unitOfWork = unitOfWork;
             _emailService = emailService;
+            _notificationHub = notificationHub;
             _logger = logger;
         }
 
@@ -46,8 +51,12 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
 
             await _unitOfWork.GetRepository<Notification>().InsertAsync(notification);
             await TrySendEmailAsync(user, request.Title, request.Message);
+            await _unitOfWork.CommitAsync();
 
-            return MapToResponse(notification);
+            var response = MapToResponse(notification);
+            await TrySendRealTimeAsync(response);
+
+            return response;
         }
 
         public async Task<IReadOnlyList<NotificationResponse>> SendToUsersAsync(
@@ -89,6 +98,13 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 await repository.InsertAsync(notification);
                 await TrySendEmailAsync(users[userId], request.Title, request.Message);
                 results.Add(MapToResponse(notification));
+            }
+
+            await _unitOfWork.CommitAsync();
+
+            foreach (var notification in results)
+            {
+                await TrySendRealTimeAsync(notification);
             }
 
             return results;
@@ -273,6 +289,25 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                     "Failed to send notification email to user {UserId} ({Email}).",
                     user.UserId,
                     user.Email);
+            }
+        }
+
+        private async Task TrySendRealTimeAsync(NotificationResponse notification)
+        {
+            try
+            {
+                await _notificationHub
+                    .Clients
+                    .User(notification.UserId.ToString())
+                    .ReceiveNotification(notification);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Failed to send real-time notification {NotificationId} to user {UserId}.",
+                    notification.NotificationId,
+                    notification.UserId);
             }
         }
 
