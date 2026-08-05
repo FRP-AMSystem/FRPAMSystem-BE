@@ -1,4 +1,5 @@
 using FRPAMSystem.BusinessTier;
+using FRPAMSystem.BusinessTier.SignalR;
 using FRPAMSystem.DataTier;
 using FRPAMSystem_BE.Extensions;
 using System.Text.Json.Serialization;
@@ -31,12 +32,15 @@ builder.Services.AddCors(options =>
             .AllowAnyMethod();
     });
 });
-
+builder.Services.AddSignalR();
 var app = builder.Build();
 
-app.UseSwagger();
-app.UseSwaggerUI();
-
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+app.MapHub<NotificationHub>("/hubs/notification");
 app.UseHttpsRedirection();
 
 app.UseCors("AllowAll");
