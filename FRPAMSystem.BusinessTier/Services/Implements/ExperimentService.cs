@@ -1,4 +1,6 @@
 using FRPAMSystem.BusinessTier.Constants;
+using FRPAMSystem.BusinessTier.DomainEvents;
+using FRPAMSystem.BusinessTier.DomainEvents.Events;
 using FRPAMSystem.BusinessTier.Enums;
 using FRPAMSystem.BusinessTier.Payload.Experiment;
 using FRPAMSystem.BusinessTier.Services.Interface;
@@ -12,10 +14,14 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
     public class ExperimentService : IExperimentService
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IDomainEventDispatcher _domainEventDispatcher;
 
-        public ExperimentService(IUnitOfWork unitOfWork)
+        public ExperimentService(
+            IUnitOfWork unitOfWork,
+            IDomainEventDispatcher domainEventDispatcher)
         {
             _unitOfWork = unitOfWork;
+            _domainEventDispatcher = domainEventDispatcher;
         }
 
         public async Task<IPaginate<ExperimentResponse>> ViewAllExperimentsAsync(
@@ -88,6 +94,11 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             await _unitOfWork.GetRepository<Experiment>().InsertAsync(experiment);
             await _unitOfWork.CommitAsync();
 
+            await _domainEventDispatcher.DispatchAsync(new ExperimentCreatedEvent(
+                experiment.ExperimentId,
+                experiment.ExperimentName,
+                experiment.ResearcherId));
+
             return (await GetExperimentByIdAsync(experiment.ExperimentId))!;
         }
 
@@ -119,6 +130,11 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
 
             _unitOfWork.GetRepository<Experiment>().Update(experiment);
             await _unitOfWork.CommitAsync();
+
+            await _domainEventDispatcher.DispatchAsync(new ExperimentSubmittedEvent(
+                experiment.ExperimentId,
+                experiment.ExperimentName,
+                experiment.ResearcherId));
 
             return await GetExperimentByIdAsync(id);
         }
