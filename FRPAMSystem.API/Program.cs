@@ -3,6 +3,7 @@ using FRPAMSystem.BusinessTier.SignalR;
 using FRPAMSystem.DataTier;
 using FRPAMSystem_BE.Extensions;
 using System.Text.Json.Serialization;
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
@@ -35,13 +36,28 @@ builder.Services.AddCors(options =>
 builder.Services.AddSignalR();
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
+var enableSwagger = app.Configuration.GetValue(
+    "Swagger:Enabled",
+    app.Environment.IsDevelopment());
+
+if (enableSwagger)
 {
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "Forestry Resource Planning API v1");
+        options.RoutePrefix = "swagger";
+    });
+
+    app.MapGet("/", () => Results.Redirect("/swagger/index.html"));
 }
+
+if (app.Configuration.GetValue("UseHttpsRedirection", false))
+{
+    app.UseHttpsRedirection();
+}
+
 app.MapHub<NotificationHub>("/hubs/notification");
-app.UseHttpsRedirection();
 
 app.UseCors("AllowAll");
 
