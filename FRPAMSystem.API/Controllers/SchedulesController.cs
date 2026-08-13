@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.Payload.Schedule;
 using FRPAMSystem.BusinessTier.Services.Interface;
@@ -16,6 +17,62 @@ namespace FRPAMSystem_BE.Controllers
         public SchedulesController(IScheduleService scheduleService)
         {
             _scheduleService = scheduleService;
+        }
+
+        /// <summary>
+        /// Mobile calendar: schedules assigned to the logged-in user (Researcher / Student).
+        /// </summary>
+        [HttpGet("mine")]
+        [Authorize(Roles = "Researcher,Student")]
+        public async Task<IActionResult> ViewMine(
+            [FromQuery] ScheduleFilter filter,
+            [FromQuery] PagingModel pagingModel)
+        {
+            var userId = GetCurrentUserId();
+
+            if (!userId.HasValue)
+            {
+                return Unauthorized(new { success = false, message = "Invalid user token" });
+            }
+
+            var result = await _scheduleService.ViewMineAsync(userId.Value, filter, pagingModel);
+
+            return Ok(new
+            {
+                success = true,
+                message = "Get my schedules successfully",
+                data = result
+            });
+        }
+
+        [HttpGet("mine/{id:int}")]
+        [Authorize(Roles = "Researcher,Student")]
+        public async Task<IActionResult> GetMineById(int id)
+        {
+            var userId = GetCurrentUserId();
+
+            if (!userId.HasValue)
+            {
+                return Unauthorized(new { success = false, message = "Invalid user token" });
+            }
+
+            var result = await _scheduleService.GetScheduleByIdForUserAsync(id, userId.Value);
+
+            if (result == null)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "Schedule not found"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "Get schedule successfully",
+                data = result
+            });
         }
 
         [HttpGet]
@@ -112,6 +169,18 @@ namespace FRPAMSystem_BE.Controllers
                 success = true,
                 message = "Delete schedule successfully"
             });
+        }
+
+        private int? GetCurrentUserId()
+        {
+            var userIdValue = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (int.TryParse(userIdValue, out var userId))
+            {
+                return userId;
+            }
+
+            return null;
         }
     }
 }

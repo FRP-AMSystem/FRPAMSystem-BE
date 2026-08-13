@@ -56,6 +56,10 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
 
             var accessToken = GenerateAccessToken(user);
 
+            var humanResourceProfile = await _unitOfWork
+                .GetRepository<HumanResourceProfile>()
+                .FirstOrDefaultAsync(predicate: h => h.UserId == user.UserId);
+
             return new LoginResponse
             {
                 AccessToken = accessToken,
@@ -64,7 +68,8 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 Username = user.Username,
                 Email = user.Email,
                 RoleId = user.RoleId,
-                RoleName = user.Role.RoleName
+                RoleName = user.Role.RoleName,
+                HumanResourceId = humanResourceProfile?.HumanResourceId
             };
         }
 

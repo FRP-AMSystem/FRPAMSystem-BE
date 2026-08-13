@@ -67,6 +67,23 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 .ToPaginateAsync(pagingModel.Page, pagingModel.Size, 1);
         }
 
+        public async Task<IPaginate<ScheduleResponse>> ViewMineAsync(
+            int userId,
+            ScheduleFilter filter,
+            PagingModel pagingModel)
+        {
+            var humanResourceId = await GetHumanResourceIdByUserIdAsync(userId);
+
+            if (!humanResourceId.HasValue)
+            {
+                throw new Exception("Human resource profile not found for current user.");
+            }
+
+            filter.AssignedHumanResourceId = humanResourceId.Value;
+
+            return await ViewAllSchedulesAsync(filter, pagingModel);
+        }
+
         public async Task<ScheduleResponse?> GetScheduleByIdAsync(int id)
         {
             var schedule = await _unitOfWork
@@ -82,6 +99,25 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                             .ThenInclude(h => h!.User));
 
             return schedule == null ? null : MapToResponse(schedule);
+        }
+
+        public async Task<ScheduleResponse?> GetScheduleByIdForUserAsync(int id, int userId)
+        {
+            var humanResourceId = await GetHumanResourceIdByUserIdAsync(userId);
+
+            if (!humanResourceId.HasValue)
+            {
+                return null;
+            }
+
+            var schedule = await GetScheduleByIdAsync(id);
+
+            if (schedule == null || schedule.AssignedHumanResourceId != humanResourceId.Value)
+            {
+                return null;
+            }
+
+            return schedule;
         }
 
         public async Task<ScheduleResponse> CreateScheduleAsync(ScheduleRequest request)
@@ -224,6 +260,15 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                     throw new Exception("Assigned human resource does not exist.");
                 }
             }
+        }
+
+        private async Task<int?> GetHumanResourceIdByUserIdAsync(int userId)
+        {
+            var profile = await _unitOfWork
+                .GetRepository<HumanResourceProfile>()
+                .FirstOrDefaultAsync(predicate: h => h.UserId == userId);
+
+            return profile?.HumanResourceId;
         }
 
         private static ScheduleResponse MapToResponse(Schedule schedule)
