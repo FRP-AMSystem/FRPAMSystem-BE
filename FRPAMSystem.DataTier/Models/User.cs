@@ -25,13 +25,15 @@ public partial class User
 
     public virtual ICollection<AllocationPlan> AllocationPlanCreatedByNavigations { get; set; } = new List<AllocationPlan>();
 
+    public virtual ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
+
     public virtual ICollection<Experiment> Experiments { get; set; } = new List<Experiment>();
 
     public virtual HumanResourceProfile? HumanResourceProfile { get; set; }
 
-    public virtual Role Role { get; set; } = null!;
-
     public virtual ICollection<Notification> Notifications { get; set; } = new List<Notification>();
+
+    public virtual Role Role { get; set; } = null!;
 
     public virtual ICollection<Schedule> Schedules { get; set; } = new List<Schedule>();
 }
