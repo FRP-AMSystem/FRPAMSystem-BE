@@ -2,13 +2,16 @@ using FRPAMSystem.BusinessTier;
 using FRPAMSystem.BusinessTier.SignalR;
 using FRPAMSystem.DataTier;
 using FRPAMSystem_BE.Extensions;
+using FRPAMSystem_BE.Filters;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
 builder.Services
-    .AddControllers()
+    .AddControllers(options =>
+    {
+        options.Filters.Add<AuditLogActionFilter>();
+    })
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.Converters.Add(
