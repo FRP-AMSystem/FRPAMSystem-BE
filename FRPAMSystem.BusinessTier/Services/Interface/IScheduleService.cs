@@ -10,7 +10,14 @@ namespace FRPAMSystem.BusinessTier.Services.Interface
             ScheduleFilter filter,
             PagingModel pagingModel);
 
+        Task<IPaginate<ScheduleResponse>> ViewMineAsync(
+            int userId,
+            ScheduleFilter filter,
+            PagingModel pagingModel);
+
         Task<ScheduleResponse?> GetScheduleByIdAsync(int id);
+
+        Task<ScheduleResponse?> GetScheduleByIdForUserAsync(int id, int userId);
 
         Task<ScheduleResponse> CreateScheduleAsync(ScheduleRequest request);
 

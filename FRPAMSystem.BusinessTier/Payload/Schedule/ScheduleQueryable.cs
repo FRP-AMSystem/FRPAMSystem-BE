@@ -23,7 +23,13 @@ namespace FRPAMSystem.BusinessTier.Payload.Schedule
                     filter.Status?.ToString(),
                     s => s.Status)
                 .WhereDateFromIf(filter.StartDateFrom, s => s.StartDate)
-                .WhereDateToIf(filter.StartDateTo, s => s.StartDate);
+                .WhereDateToIf(filter.StartDateTo, s => s.StartDate)
+                .WhereIf(
+                    filter.DateFrom.HasValue,
+                    s => s.EndDate >= filter.DateFrom!.Value)
+                .WhereIf(
+                    filter.DateTo.HasValue,
+                    s => s.StartDate <= filter.DateTo!.Value);
         }
     }
 }
