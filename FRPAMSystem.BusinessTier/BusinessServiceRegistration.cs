@@ -53,6 +53,7 @@ namespace FRPAMSystem.BusinessTier
             services.AddScoped<IScheduleService, ScheduleService>();
             services.AddScoped<IEmailService, EmailService>();
             services.AddScoped<INotificationService, NotificationService>();
+            services.AddScoped<IAuditLogService, AuditLogService>();
             services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
             services.AddScoped<IDomainEventHandler, ExperimentCreatedHandler>();
             services.AddScoped<IDomainEventHandler, ExperimentSubmittedHandler>();
