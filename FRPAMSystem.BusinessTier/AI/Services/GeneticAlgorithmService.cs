@@ -221,6 +221,7 @@ namespace FRPAMSystem.BusinessTier.AI.Services
                         EquipmentTypeName = instance?.EquipmentType?.Name,
                         IsSubstitute = assignment.IsSubstitute,
                         EfficiencyRate = assignment.EfficiencyRate,
+                        TimeMultiplier = assignment.TimeMultiplier,
                         StartDate = gene.StartDate,
                         EndDate = gene.EndDate
                     });
