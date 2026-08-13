@@ -123,6 +123,8 @@ namespace FRPAMSystem.BusinessTier.AI.DTO
 
         public double EfficiencyRate { get; set; }
 
+        public double TimeMultiplier { get; set; }
+
         public DateTime StartDate { get; set; }
 
         public DateTime EndDate { get; set; }

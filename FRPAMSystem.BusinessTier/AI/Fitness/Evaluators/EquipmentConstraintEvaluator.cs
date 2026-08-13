@@ -49,10 +49,7 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness.Evaluators
                         }
                         else if (assignment.IsSubstitute && requirement.AllowSubstitute)
                         {
-                            var substitution = input.EquipmentSubstitutions.FirstOrDefault(s =>
-                                s.PrimaryEquipmentTypeId == requirement.EquipmentTypeId &&
-                                s.SubEquipmentTypeId == instance.EquipmentTypeId);
-                            var efficiencyRate = substitution?.EfficiencyRate ?? assignment.EfficiencyRate;
+                            var efficiencyRate = Math.Clamp(assignment.EfficiencyRate, 0d, 1d);
 
                             if (requirement.MinAcceptableEfficiency.HasValue &&
                                 efficiencyRate < requirement.MinAcceptableEfficiency.Value)

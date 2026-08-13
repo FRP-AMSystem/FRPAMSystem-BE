@@ -16,6 +16,8 @@ namespace FRPAMSystem.BusinessTier.AI.Models
 
         public double EfficiencyRate { get; set; } = 1d;
 
+        public double TimeMultiplier { get; set; } = 1d;
+
         public EquipmentAssignmentGene Clone()
         {
             return new EquipmentAssignmentGene
@@ -26,7 +28,8 @@ namespace FRPAMSystem.BusinessTier.AI.Models
                 AllocatedEquipmentTypeId = AllocatedEquipmentTypeId,
                 EquipmentInstanceId = EquipmentInstanceId,
                 IsSubstitute = IsSubstitute,
-                EfficiencyRate = EfficiencyRate
+                EfficiencyRate = EfficiencyRate,
+                TimeMultiplier = TimeMultiplier
             };
         }
     }
