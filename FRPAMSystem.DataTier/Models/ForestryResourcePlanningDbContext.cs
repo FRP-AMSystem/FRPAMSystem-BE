@@ -25,6 +25,8 @@ public partial class ForestryResourcePlanningDbContext : DbContext
 
     public virtual DbSet<Area> Areas { get; set; }
 
+    public virtual DbSet<AuditLog> AuditLogs { get; set; }
+
     public virtual DbSet<EquipmentCategory> EquipmentCategories { get; set; }
 
     public virtual DbSet<EquipmentInstance> EquipmentInstances { get; set; }
@@ -247,6 +249,39 @@ public partial class ForestryResourcePlanningDbContext : DbContext
                 .HasColumnName("created_at");
             entity.Property(e => e.Description).HasColumnName("description");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+        });
+
+        modelBuilder.Entity<AuditLog>(entity =>
+        {
+            entity.HasKey(e => e.AuditLogId).HasName("PK__AuditLog__6031F9F8B4E08B4B");
+
+            entity.ToTable("AuditLog");
+
+            entity.Property(e => e.AuditLogId).HasColumnName("audit_log_id");
+            entity.Property(e => e.Action)
+                .HasMaxLength(100)
+                .HasColumnName("action");
+            entity.Property(e => e.ActorUserId).HasColumnName("actor_user_id");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("(sysutcdatetime())")
+                .HasColumnName("created_at");
+            entity.Property(e => e.Description).HasColumnName("description");
+            entity.Property(e => e.Metadata).HasColumnName("metadata");
+            entity.Property(e => e.Module)
+                .HasMaxLength(100)
+                .HasColumnName("module");
+            entity.Property(e => e.ReferenceId).HasColumnName("reference_id");
+            entity.Property(e => e.ReferenceType)
+                .HasMaxLength(100)
+                .HasColumnName("reference_type");
+            entity.Property(e => e.Severity)
+                .HasMaxLength(30)
+                .HasDefaultValue("Information")
+                .HasColumnName("severity");
+
+            entity.HasOne(d => d.ActorUser).WithMany(p => p.AuditLogs)
+                .HasForeignKey(d => d.ActorUserId)
+                .HasConstraintName("FK_AuditLog_User");
         });
 
         modelBuilder.Entity<EquipmentCategory>(entity =>
@@ -601,46 +636,6 @@ public partial class ForestryResourcePlanningDbContext : DbContext
                 .HasConstraintName("FK_HumanResourceSkill_Skill");
         });
 
-        modelBuilder.Entity<Notification>(entity =>
-        {
-            entity.HasKey(e => e.NotificationId);
-
-            entity.ToTable("Notification");
-
-            entity.HasIndex(e => new { e.UserId, e.IsRead, e.CreatedAt }, "IX_Notification_User_IsRead_CreatedAt")
-                .IsDescending(false, false, true);
-
-            entity.Property(e => e.NotificationId).HasColumnName("notification_id");
-            entity.Property(e => e.UserId).HasColumnName("user_id");
-            entity.Property(e => e.Title)
-                .HasMaxLength(255)
-                .HasColumnName("title");
-            entity.Property(e => e.Message).HasColumnName("message");
-            entity.Property(e => e.NotificationType)
-                .HasMaxLength(50)
-                .HasColumnName("notification_type");
-            entity.Property(e => e.ReferenceType)
-                .HasMaxLength(50)
-                .HasColumnName("reference_type");
-            entity.Property(e => e.ReferenceId).HasColumnName("reference_id");
-            entity.Property(e => e.IsRead)
-                .HasDefaultValue(false)
-                .HasColumnName("is_read");
-            entity.Property(e => e.ReadAt).HasColumnName("read_at");
-            entity.Property(e => e.IsDeleted)
-                .HasDefaultValue(false)
-                .HasColumnName("is_deleted");
-            entity.Property(e => e.DeletedAt).HasColumnName("deleted_at");
-            entity.Property(e => e.CreatedAt)
-                .HasDefaultValueSql("(getdate())")
-                .HasColumnName("created_at");
-
-            entity.HasOne(d => d.User).WithMany(p => p.Notifications)
-                .HasForeignKey(d => d.UserId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_Notification_User");
-        });
-
         modelBuilder.Entity<LandResource>(entity =>
         {
             entity.HasKey(e => e.LandId).HasName("PK__LandReso__E146676D7EB5E8D0");
@@ -675,6 +670,41 @@ public partial class ForestryResourcePlanningDbContext : DbContext
                 .HasForeignKey(d => d.AreaId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_LandResource_Area");
+        });
+
+        modelBuilder.Entity<Notification>(entity =>
+        {
+            entity.HasKey(e => e.NotificationId).HasName("PK__Notifica__E059842F5A6795FB");
+
+            entity.ToTable("Notification");
+
+            entity.HasIndex(e => new { e.UserId, e.IsRead, e.CreatedAt }, "IX_Notification_User_IsRead_CreatedAt").IsDescending(false, false, true);
+
+            entity.Property(e => e.NotificationId).HasColumnName("notification_id");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnName("created_at");
+            entity.Property(e => e.DeletedAt).HasColumnName("deleted_at");
+            entity.Property(e => e.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(e => e.IsRead).HasColumnName("is_read");
+            entity.Property(e => e.Message).HasColumnName("message");
+            entity.Property(e => e.NotificationType)
+                .HasMaxLength(50)
+                .HasColumnName("notification_type");
+            entity.Property(e => e.ReadAt).HasColumnName("read_at");
+            entity.Property(e => e.ReferenceId).HasColumnName("reference_id");
+            entity.Property(e => e.ReferenceType)
+                .HasMaxLength(50)
+                .HasColumnName("reference_type");
+            entity.Property(e => e.Title)
+                .HasMaxLength(255)
+                .HasColumnName("title");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+
+            entity.HasOne(d => d.User).WithMany(p => p.Notifications)
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_Notification_User");
         });
 
         modelBuilder.Entity<PhaseEquipmentRequirement>(entity =>

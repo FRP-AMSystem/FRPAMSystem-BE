@@ -1,4 +1,6 @@
-﻿using FRPAMSystem.BusinessTier.Constants;
+using FRPAMSystem.BusinessTier.Constants;
+using FRPAMSystem.BusinessTier.DomainEvents;
+using FRPAMSystem.BusinessTier.DomainEvents.Events;
 using FRPAMSystem.BusinessTier.Enums;
 using FRPAMSystem.BusinessTier.Payload.AllocationPlan;
 using FRPAMSystem.BusinessTier.Services.Interface;
@@ -17,10 +19,14 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
     public class AllocationPlanService : IAllocationPlanService
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IDomainEventDispatcher _domainEventDispatcher;
 
-        public AllocationPlanService(IUnitOfWork unitOfWork)
+        public AllocationPlanService(
+            IUnitOfWork unitOfWork,
+            IDomainEventDispatcher domainEventDispatcher)
         {
             _unitOfWork = unitOfWork;
+            _domainEventDispatcher = domainEventDispatcher;
         }
 
         public async Task<IPaginate<AllocationPlanResponse>> ViewAllAllocationPlansAsync(
@@ -335,6 +341,12 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                         .Include(p => p.Schedules)
                 );
 
+            await _domainEventDispatcher.DispatchAsync(new AllocationPlanSubmittedEvent(
+                submitted!.AllocationPlanId,
+                submitted.ExperimentId,
+                submitted.Experiment?.ExperimentName,
+                submitted.CreatedBy));
+
             return MapToResponse(submitted!);
         }
 
@@ -399,6 +411,13 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                         .Include(p => p.Schedules)
                 );
 
+            await _domainEventDispatcher.DispatchAsync(new AllocationPlanApprovedEvent(
+                approved!.AllocationPlanId,
+                approved.ExperimentId,
+                approved.Experiment?.ExperimentName,
+                approved.CreatedBy,
+                currentUserId.Value));
+
             return MapToResponse(approved!);
         }
 
@@ -453,6 +472,13 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                         .Include(p => p.AllocationHumanDetails)
                         .Include(p => p.Schedules)
                 );
+
+            await _domainEventDispatcher.DispatchAsync(new AllocationPlanRejectedEvent(
+                rejected!.AllocationPlanId,
+                rejected.ExperimentId,
+                rejected.Experiment?.ExperimentName,
+                rejected.CreatedBy,
+                currentUserId.Value));
 
             return MapToResponse(rejected!);
         }
