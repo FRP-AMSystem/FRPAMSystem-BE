@@ -19,5 +19,15 @@ namespace FRPAMSystem.BusinessTier.Payload.Schedule
         public DateTime? StartDateFrom { get; set; }
 
         public DateTime? StartDateTo { get; set; }
+
+        /// <summary>
+        /// Calendar overlap: schedule ends on or after this date.
+        /// </summary>
+        public DateTime? DateFrom { get; set; }
+
+        /// <summary>
+        /// Calendar overlap: schedule starts on or before this date.
+        /// </summary>
+        public DateTime? DateTo { get; set; }
     }
 }

@@ -21,5 +21,7 @@ namespace FRPAMSystem.BusinessTier.Payload.Auth
         public int RoleId { get; set; }
 
         public string RoleName { get; set; } = string.Empty;
+
+        public int? HumanResourceId { get; set; }
     }
 }
