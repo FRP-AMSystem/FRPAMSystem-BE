@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -39,5 +39,19 @@ namespace FRPAMSystem.BusinessTier.Payload.AllocationPlan
         public int HumanDetailCount { get; set; }
 
         public int ScheduleCount { get; set; }
+
+        public double? PenaltyScore { get; set; }
+
+        public double? BonusScore { get; set; }
+
+        public int? ConflictCount { get; set; }
+
+        public AI.Models.FitnessBreakdown? FitnessBreakdown { get; set; }
+
+        public AI.Models.ConstraintReport? ConstraintReport { get; set; }
+
+        public List<string>? Advantages { get; set; }
+
+        public List<string>? Disadvantages { get; set; }
     }
 }

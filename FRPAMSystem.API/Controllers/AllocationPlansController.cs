@@ -1,4 +1,4 @@
-﻿using FRPAMSystem.BusinessTier.Constants;
+using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.Payload.AllocationPlan;
 using FRPAMSystem.BusinessTier.Services.Interface;
 using Microsoft.AspNetCore.Authorization;
@@ -216,6 +216,32 @@ namespace FRPAMSystem_BE.Controllers
             {
                 success = true,
                 message = "Cancel allocation plan successfully",
+                data = result
+            });
+        }
+
+        [HttpPost("{id:int}/evaluate")]
+        [Authorize(Roles = "Admin,Manager,Researcher")]
+        public async Task<IActionResult> EvaluatePlanFitness(
+            int id,
+            [FromBody] FRPAMSystem.BusinessTier.AI.Models.OptimizationSettings? settings = null)
+        {
+            var result = await _allocationPlanService
+                .EvaluatePlanFitnessAsync(id, settings);
+
+            if (result == null)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "Allocation plan not found"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "Evaluate allocation plan fitness successfully",
                 data = result
             });
         }
