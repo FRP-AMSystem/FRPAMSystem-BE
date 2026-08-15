@@ -1,6 +1,7 @@
 using FRPAMSystem.BusinessTier.AI.Fitness;
 using FRPAMSystem.BusinessTier.AI.Fitness.Evaluators;
 using FRPAMSystem.BusinessTier.AI.Generator;
+using FRPAMSystem.BusinessTier.AI.Mappers;
 using FRPAMSystem.BusinessTier.AI.Operators.Crossover;
 using FRPAMSystem.BusinessTier.AI.Operators.Mutation;
 using FRPAMSystem.BusinessTier.AI.Operators.Selection;
@@ -74,6 +75,7 @@ namespace FRPAMSystem.BusinessTier
             services.AddScoped<ICrossoverOperator, SinglePointCrossoverOperator>();
             services.AddScoped<IMutationOperator, AdaptiveMutationOperator>();
             services.AddScoped<IGeneticAlgorithmService, GeneticAlgorithmService>();
+            services.AddScoped<IAllocationPlanChromosomeMapper, AllocationPlanChromosomeMapper>();
             services.AddScoped<IAllocationOptimizationService, AllocationOptimizationService>();
 
             return services;
