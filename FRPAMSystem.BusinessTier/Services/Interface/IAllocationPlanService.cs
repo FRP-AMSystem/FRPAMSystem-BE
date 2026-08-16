@@ -1,4 +1,4 @@
-﻿using FRPAMSystem.BusinessTier.Constants;
+using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.Payload.AllocationPlan;
 using FRPAMSystem.DataTier.Paginate;
 using System;
@@ -40,5 +40,9 @@ namespace FRPAMSystem.BusinessTier.Services.Interface
 
         Task<AllocationPlanResponse?> CancelAllocationPlanAsync(
             int id);
+
+        Task<AllocationPlanResponse?> EvaluatePlanFitnessAsync(
+            int id,
+            AI.Models.OptimizationSettings? settings = null);
     }
 }

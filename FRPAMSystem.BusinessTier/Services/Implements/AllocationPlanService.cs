@@ -1,3 +1,6 @@
+using FRPAMSystem.BusinessTier.AI.Fitness;
+using FRPAMSystem.BusinessTier.AI.Mappers;
+using FRPAMSystem.BusinessTier.AI.Models;
 using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.DomainEvents;
 using FRPAMSystem.BusinessTier.DomainEvents.Events;
@@ -20,13 +23,19 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly IDomainEventDispatcher _domainEventDispatcher;
+        private readonly IFitnessCalculator _fitnessCalculator;
+        private readonly IAllocationPlanChromosomeMapper _chromosomeMapper;
 
         public AllocationPlanService(
             IUnitOfWork unitOfWork,
-            IDomainEventDispatcher domainEventDispatcher)
+            IDomainEventDispatcher domainEventDispatcher,
+            IFitnessCalculator fitnessCalculator,
+            IAllocationPlanChromosomeMapper chromosomeMapper)
         {
             _unitOfWork = unitOfWork;
             _domainEventDispatcher = domainEventDispatcher;
+            _fitnessCalculator = fitnessCalculator;
+            _chromosomeMapper = chromosomeMapper;
         }
 
         public async Task<IPaginate<AllocationPlanResponse>> ViewAllAllocationPlansAsync(
@@ -217,15 +226,50 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                     predicate: p => p.AllocationPlanId == id,
                     include: query => query
                         .Include(p => p.Experiment)
+                            .ThenInclude(e => e.ExperimentPhases)
                         .Include(p => p.CreatedByNavigation)
                         .Include(p => p.ApproveByNavigation)
                         .Include(p => p.AllocationLandDetails)
+                            .ThenInclude(l => l.Land)
+                        .Include(p => p.AllocationLandDetails)
+                            .ThenInclude(l => l.ExpLandReq)
                         .Include(p => p.AllocationEquipmentDetails)
+                            .ThenInclude(e => e.AllocatedEquipmentType)
+                        .Include(p => p.AllocationEquipmentDetails)
+                            .ThenInclude(e => e.EquipmentInstance)
+                        .Include(p => p.AllocationEquipmentDetails)
+                            .ThenInclude(e => e.PhaseEquipmentReq)
+                        .Include(p => p.AllocationEquipmentDetails)
+                            .ThenInclude(e => e.ExpEquipmentReq)
                         .Include(p => p.AllocationHumanDetails)
-                        .Include(p => p.Schedules)
+                            .ThenInclude(h => h.HumanResource)
+                        .Include(p => p.AllocationHumanDetails)
+                            .ThenInclude(h => h.PhaseHumanReq)
+                        .Include(p => p.AllocationHumanDetails)
+                            .ThenInclude(h => h.ExpHumanReq)
+                        .Include(p => p.Schedules),
+                    asNoTracking: false
                 );
 
-            return MapToResponse(updated!);
+            FitnessResult? fitnessResult = null;
+            if (updated != null &&
+                (updated.AllocationLandDetails.Count > 0 ||
+                 updated.AllocationEquipmentDetails.Count > 0 ||
+                 updated.AllocationHumanDetails.Count > 0 ||
+                 updated.Schedules.Count > 0))
+            {
+                var input = await BuildOptimizationInputForPlanAsync(
+                    updated.ExperimentId,
+                    updated.AllocationPlanId,
+                    null);
+                var chromosome = _chromosomeMapper.MapToChromosome(updated, input);
+                fitnessResult = _fitnessCalculator.Evaluate(chromosome, input);
+                updated.FitnessScore = fitnessResult.FitnessScore;
+                _unitOfWork.GetRepository<AllocationPlan>().Update(updated);
+                await _unitOfWork.CommitAsync();
+            }
+
+            return MapToResponse(updated!, fitnessResult);
         }
 
         public async Task<bool> DeleteAllocationPlanAsync(int id)
@@ -530,15 +574,198 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             return MapToResponse(cancelled!);
         }
 
-        private static AllocationPlanResponse MapToResponse(
-            AllocationPlan allocationPlan)
+        public async Task<AllocationPlanResponse?> EvaluatePlanFitnessAsync(
+            int id,
+            OptimizationSettings? settings = null)
         {
-            return new AllocationPlanResponse
+            var allocationPlan = await _unitOfWork
+                .GetRepository<AllocationPlan>()
+                .FirstOrDefaultAsync(
+                    predicate: p => p.AllocationPlanId == id,
+                    include: query => query
+                        .Include(p => p.Experiment)
+                            .ThenInclude(e => e.ExperimentPhases)
+                        .Include(p => p.CreatedByNavigation)
+                        .Include(p => p.ApproveByNavigation)
+                        .Include(p => p.AllocationLandDetails)
+                            .ThenInclude(l => l.Land)
+                        .Include(p => p.AllocationLandDetails)
+                            .ThenInclude(l => l.ExpLandReq)
+                        .Include(p => p.AllocationEquipmentDetails)
+                            .ThenInclude(e => e.AllocatedEquipmentType)
+                        .Include(p => p.AllocationEquipmentDetails)
+                            .ThenInclude(e => e.EquipmentInstance)
+                        .Include(p => p.AllocationEquipmentDetails)
+                            .ThenInclude(e => e.PhaseEquipmentReq)
+                        .Include(p => p.AllocationEquipmentDetails)
+                            .ThenInclude(e => e.ExpEquipmentReq)
+                        .Include(p => p.AllocationHumanDetails)
+                            .ThenInclude(h => h.HumanResource)
+                        .Include(p => p.AllocationHumanDetails)
+                            .ThenInclude(h => h.PhaseHumanReq)
+                        .Include(p => p.AllocationHumanDetails)
+                            .ThenInclude(h => h.ExpHumanReq)
+                        .Include(p => p.Schedules),
+                    asNoTracking: false
+                );
+
+            if (allocationPlan == null)
+            {
+                return null;
+            }
+
+            var input = await BuildOptimizationInputForPlanAsync(
+                allocationPlan.ExperimentId,
+                allocationPlan.AllocationPlanId,
+                settings);
+
+            var chromosome = _chromosomeMapper.MapToChromosome(allocationPlan, input);
+            var fitnessResult = _fitnessCalculator.Evaluate(chromosome, input);
+
+            allocationPlan.FitnessScore = fitnessResult.FitnessScore;
+            allocationPlan.UpdatedAt = DateTime.Now;
+
+            _unitOfWork.GetRepository<AllocationPlan>().Update(allocationPlan);
+            await _unitOfWork.CommitAsync();
+
+            return MapToResponse(allocationPlan, fitnessResult);
+        }
+
+        private async Task<OptimizationInput> BuildOptimizationInputForPlanAsync(
+            int experimentId,
+            int? currentPlanId,
+            OptimizationSettings? settings)
+        {
+            var experiment = await _unitOfWork
+                .GetRepository<Experiment>()
+                .FirstOrDefaultAsync(
+                    predicate: e => e.ExperimentId == experimentId,
+                    include: query => query
+                        .Include(e => e.ExperimentPhases)
+                        .Include(e => e.ExperimentLandRequirements)
+                        .Include(e => e.ExperimentHumanRequirements)
+                            .ThenInclude(r => r.RequiredSkill)
+                        .Include(e => e.ExperimentEquipmentRequirements)
+                            .ThenInclude(r => r.EquipmentType));
+
+            if (experiment is null)
+            {
+                throw new Exception("Experiment does not exist.");
+            }
+
+            var phaseIds = experiment.ExperimentPhases.Select(p => p.PhaseId).ToList();
+
+            var phaseHumanRequirements = await _unitOfWork
+                .GetRepository<PhaseHumanRequirement>()
+                .GetQueryable()
+                .Include(r => r.RequiredSkill)
+                .Where(r => phaseIds.Contains(r.PhaseId))
+                .AsNoTracking()
+                .ToListAsync();
+
+            var phaseEquipmentRequirements = await _unitOfWork
+                .GetRepository<PhaseEquipmentRequirement>()
+                .GetQueryable()
+                .Include(r => r.EquipmentType)
+                .Where(r => phaseIds.Contains(r.PhaseId))
+                .AsNoTracking()
+                .ToListAsync();
+
+            var lands = await _unitOfWork
+                .GetRepository<LandResource>()
+                .GetQueryable()
+                .Include(l => l.Area)
+                .AsNoTracking()
+                .ToListAsync();
+
+            var humans = await _unitOfWork
+                .GetRepository<HumanResourceProfile>()
+                .GetQueryable()
+                .Include(h => h.User)
+                .Include(h => h.HumanResourceSkills)
+                    .ThenInclude(s => s.Skill)
+                .AsNoTracking()
+                .ToListAsync();
+
+            var equipment = await _unitOfWork
+                .GetRepository<EquipmentInstance>()
+                .GetQueryable()
+                .Include(e => e.EquipmentType)
+                .AsNoTracking()
+                .ToListAsync();
+
+            var skills = await _unitOfWork
+                .GetRepository<Skill>()
+                .GetQueryable()
+                .AsNoTracking()
+                .ToListAsync();
+
+            var schedules = await _unitOfWork
+                .GetRepository<Schedule>()
+                .GetQueryable()
+                .Where(s => currentPlanId == null || s.AllocationPlanId != currentPlanId.Value)
+                .AsNoTracking()
+                .ToListAsync();
+
+            var landAllocations = await _unitOfWork
+                .GetRepository<AllocationLandDetail>()
+                .GetQueryable()
+                .Where(a => currentPlanId == null || a.AllocationPlanId != currentPlanId.Value)
+                .AsNoTracking()
+                .ToListAsync();
+
+            var humanAllocations = await _unitOfWork
+                .GetRepository<AllocationHumanDetail>()
+                .GetQueryable()
+                .Where(a => currentPlanId == null || a.AllocationPlanId != currentPlanId.Value)
+                .AsNoTracking()
+                .ToListAsync();
+
+            var equipmentAllocations = await _unitOfWork
+                .GetRepository<AllocationEquipmentDetail>()
+                .GetQueryable()
+                .Where(a => currentPlanId == null || a.AllocationPlanId != currentPlanId.Value)
+                .AsNoTracking()
+                .ToListAsync();
+
+            var substitutions = await _unitOfWork
+                .GetRepository<EquipmentSubstitution>()
+                .GetQueryable()
+                .AsNoTracking()
+                .ToListAsync();
+
+            return new OptimizationInput
+            {
+                Experiment = experiment,
+                ExperimentPhases = experiment.ExperimentPhases.OrderBy(p => p.PhaseOrder).ToList(),
+                LandResources = lands,
+                HumanResources = humans,
+                EquipmentInstances = equipment,
+                Skills = skills,
+                ExperimentLandRequirements = experiment.ExperimentLandRequirements.ToList(),
+                ExperimentHumanRequirements = experiment.ExperimentHumanRequirements.ToList(),
+                ExperimentEquipmentRequirements = experiment.ExperimentEquipmentRequirements.ToList(),
+                PhaseHumanRequirements = phaseHumanRequirements,
+                PhaseEquipmentRequirements = phaseEquipmentRequirements,
+                ExistingSchedules = schedules,
+                ExistingLandAllocations = landAllocations,
+                ExistingHumanAllocations = humanAllocations,
+                ExistingEquipmentAllocations = equipmentAllocations,
+                EquipmentSubstitutions = substitutions,
+                Settings = settings?.Clone() ?? new OptimizationSettings()
+            };
+        }
+
+        private static AllocationPlanResponse MapToResponse(
+            AllocationPlan allocationPlan,
+            FitnessResult? fitnessResult = null)
+        {
+            var response = new AllocationPlanResponse
             {
                 AllocationPlanId = allocationPlan.AllocationPlanId,
                 ExperimentId = allocationPlan.ExperimentId,
                 ExperimentName = allocationPlan.Experiment?.ExperimentName,
-                FitnessScore = allocationPlan.FitnessScore,
+                FitnessScore = fitnessResult?.FitnessScore ?? allocationPlan.FitnessScore,
                 CreatedBy = allocationPlan.CreatedBy,
                 CreatedByName = allocationPlan.CreatedByNavigation?.FullName,
                 ApproveBy = allocationPlan.ApproveBy,
@@ -552,6 +779,19 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 HumanDetailCount = allocationPlan.AllocationHumanDetails?.Count ?? 0,
                 ScheduleCount = allocationPlan.Schedules?.Count ?? 0
             };
+
+            if (fitnessResult != null)
+            {
+                response.PenaltyScore = fitnessResult.PenaltyScore;
+                response.BonusScore = fitnessResult.BonusScore;
+                response.ConflictCount = fitnessResult.ConflictCount;
+                response.FitnessBreakdown = fitnessResult.Breakdown;
+                response.ConstraintReport = fitnessResult.ConstraintReport;
+                response.Advantages = fitnessResult.Advantages;
+                response.Disadvantages = fitnessResult.Disadvantages;
+            }
+
+            return response;
         }
 
         private static void ValidateAllocationPlanRequest(

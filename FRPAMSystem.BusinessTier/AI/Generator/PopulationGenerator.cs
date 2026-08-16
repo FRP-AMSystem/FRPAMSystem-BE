@@ -62,8 +62,29 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
             AssignLand(gene, input);
             AssignHumans(gene, input);
             AssignEquipment(gene, input);
+            ApplySubstitutionDuration(gene, durationDays);
 
             return gene;
+        }
+
+        private static void ApplySubstitutionDuration(
+            AllocationGene gene,
+            int baseDurationDays)
+        {
+            var timeMultiplier = gene.EquipmentAssignments.Count == 0
+                ? 1d
+                : gene.EquipmentAssignments.Max(e => Math.Max(1d, e.TimeMultiplier));
+
+            if (timeMultiplier <= 1d)
+            {
+                return;
+            }
+
+            var adjustedDurationDays = Math.Max(
+                1,
+                (int)Math.Ceiling(baseDurationDays * timeMultiplier));
+
+            gene.EndDate = gene.StartDate.AddDays(adjustedDurationDays);
         }
 
         private void AssignLand(AllocationGene gene, OptimizationInput input)
@@ -253,7 +274,8 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
                     AllocatedEquipmentTypeId = equipment.EquipmentTypeId,
                     EquipmentInstanceId = equipment.EquipmentInstanceId,
                     IsSubstitute = false,
-                    EfficiencyRate = 1d
+                    EfficiencyRate = 1d,
+                    TimeMultiplier = 1d
                 };
             }
 
@@ -274,7 +296,8 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
                 AllocatedEquipmentTypeId = equipment.EquipmentTypeId,
                 EquipmentInstanceId = equipment.EquipmentInstanceId,
                 IsSubstitute = true,
-                EfficiencyRate = substitution.EfficiencyRate
+                EfficiencyRate = substitution.EfficiencyRate,
+                TimeMultiplier = substitution.TimeMultiplier
             };
         }
 
