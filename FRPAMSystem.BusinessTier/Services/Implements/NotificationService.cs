@@ -39,6 +39,15 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 request.Message,
                 request.NotificationType);
 
+            _logger.LogInformation(
+                "[NotificationService] Sending notification. " +
+                "NotificationType={NotificationType}, ReferenceType={ReferenceType}, " +
+                "ReferenceId={ReferenceId}, ResolvedRecipientUserId={RecipientUserId}",
+                request.NotificationType,
+                request.ReferenceType ?? "(none)",
+                request.ReferenceId?.ToString() ?? "(none)",
+                request.UserId);
+
             var user = await GetUserAsync(request.UserId);
 
             var notification = BuildNotification(
@@ -67,6 +76,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 throw new Exception("At least one user id is required.");
             }
 
+            // Deduplicate to ensure each user receives at most one notification per event.
             var distinctUserIds = request.UserIds.Distinct().ToList();
 
             ValidateSendPayload(
@@ -74,6 +84,17 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 request.Title,
                 request.Message,
                 request.NotificationType);
+
+            _logger.LogInformation(
+                "[NotificationService] Sending notification to multiple recipients. " +
+                "NotificationType={NotificationType}, ReferenceType={ReferenceType}, " +
+                "ReferenceId={ReferenceId}, ResolvedRecipientUserIds=[{RecipientUserIds}], " +
+                "TotalRecipients={TotalRecipients}",
+                request.NotificationType,
+                request.ReferenceType ?? "(none)",
+                request.ReferenceId?.ToString() ?? "(none)",
+                string.Join(",", distinctUserIds),
+                distinctUserIds.Count);
 
             var users = new Dictionary<int, User>();
 
