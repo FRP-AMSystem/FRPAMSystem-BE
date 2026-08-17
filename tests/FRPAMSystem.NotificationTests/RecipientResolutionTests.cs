@@ -215,32 +215,52 @@ namespace FRPAMSystem.NotificationTests
         }
 
         [Fact]
-        public async Task Case1_ExperimentCreated_UserACreatesExperiment_NotifiesResearcherUserB()
+        public async Task Case1_ExperimentCreated_UserACreatesExperiment_NotifiesManagersExcludingActor()
         {
-            // Arrange:
-            // Admin creates experiment and assigns ResearcherId = 88 (User B)
+            // Arrange
             int researcherUserId = 88;
+            var manager1 = 101;
+            var manager2 = 102;
+            
+            var notificationServiceMock = new Mock<INotificationService>();
+            var auditLogServiceMock = new Mock<IAuditLogService>();
+            var unitOfWorkMock = new Mock<IUnitOfWork>();
+            var userRepoMock = new Mock<IGenericRepository<User>>();
+            
+            userRepoMock.Setup(r => r.GetListAsync(
+                It.IsAny<Expression<Func<User, int>>>(),
+                It.IsAny<Expression<Func<User, bool>>>(),
+                It.IsAny<Func<IQueryable<User>, IOrderedQueryable<User>>>(),
+                It.IsAny<Func<IQueryable<User>, IIncludableQueryable<User, object>>>(),
+                It.IsAny<bool>()))
+            .ReturnsAsync(new List<int> { manager1, manager2 });
+
+            unitOfWorkMock.Setup(u => u.GetRepository<User>()).Returns(userRepoMock.Object);
 
             var handler = new ExperimentCreatedHandler(
-                _notificationServiceMock.Object,
-                _auditLogServiceMock.Object);
+                notificationServiceMock.Object,
+                auditLogServiceMock.Object,
+                unitOfWorkMock.Object);
 
             var domainEvent = new ExperimentCreatedEvent(
                 experimentId: 301,
                 experimentName: "Soil Carbon Study",
                 researcherId: researcherUserId);
 
-            SendNotificationRequest? capturedRequest = null;
-            _notificationServiceMock.Setup(s => s.SendAsync(It.IsAny<SendNotificationRequest>()))
-                .Callback<SendNotificationRequest>(req => capturedRequest = req)
-                .ReturnsAsync(new NotificationResponse());
+            SendNotificationToUsersRequest? capturedRequest = null;
+            notificationServiceMock.Setup(s => s.SendToUsersAsync(It.IsAny<SendNotificationToUsersRequest>()))
+                .Callback<SendNotificationToUsersRequest>(req => capturedRequest = req)
+                .ReturnsAsync(new List<NotificationResponse>());
 
             // Act
             await handler.HandleAsync(domainEvent, CancellationToken.None);
 
             // Assert
             Assert.NotNull(capturedRequest);
-            Assert.Equal(researcherUserId, capturedRequest.UserId);
+            Assert.Equal(2, capturedRequest.UserIds.Count);
+            Assert.Contains(manager1, capturedRequest.UserIds);
+            Assert.Contains(manager2, capturedRequest.UserIds);
+            Assert.DoesNotContain(researcherUserId, capturedRequest.UserIds);
             Assert.Equal(NotificationTypes.ExperimentCreated, capturedRequest.NotificationType);
             Assert.Equal(NotificationReferenceTypes.Experiment, capturedRequest.ReferenceType);
             Assert.Equal(301, capturedRequest.ReferenceId);

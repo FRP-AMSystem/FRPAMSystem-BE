@@ -29,7 +29,7 @@ namespace FRPAMSystem.BusinessTier.DomainEvents.Handlers
                 .GetRepository<User>()
                 .GetListAsync(
                     selector: user => user.UserId,
-                    predicate: user => user.Role.RoleName == "Admin" || user.Role.RoleName == "Manager");
+                    predicate: user => user.Role.RoleName == "Manager" && user.UserId != domainEvent.ResearcherId);
 
             if (reviewers.Count == 0)
             {
