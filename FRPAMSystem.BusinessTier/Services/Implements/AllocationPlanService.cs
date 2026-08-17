@@ -166,6 +166,12 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                         .Include(p => p.Schedules)
                 );
 
+            await _domainEventDispatcher.DispatchAsync(new AllocationPlanGeneratedEvent(
+                created!.AllocationPlanId,
+                created.ExperimentId,
+                created.Experiment?.ExperimentName,
+                created.CreatedBy));
+
             return MapToResponse(created!);
         }
 
