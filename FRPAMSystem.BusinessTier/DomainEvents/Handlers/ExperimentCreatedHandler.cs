@@ -3,6 +3,8 @@ using FRPAMSystem.BusinessTier.DomainEvents.Events;
 using FRPAMSystem.BusinessTier.Payload.AuditLog;
 using FRPAMSystem.BusinessTier.Payload.Notification;
 using FRPAMSystem.BusinessTier.Services.Interface;
+using FRPAMSystem.DataTier.Models;
+using FRPAMSystem.DataTier.Repository.Interfaces;
 
 namespace FRPAMSystem.BusinessTier.DomainEvents.Handlers
 {
@@ -10,19 +12,23 @@ namespace FRPAMSystem.BusinessTier.DomainEvents.Handlers
     {
         private readonly INotificationService _notificationService;
         private readonly IAuditLogService _auditLogService;
+        private readonly IUnitOfWork _unitOfWork;
 
         public ExperimentCreatedHandler(
             INotificationService notificationService,
-            IAuditLogService auditLogService)
+            IAuditLogService auditLogService,
+            IUnitOfWork unitOfWork)
         {
             _notificationService = notificationService;
             _auditLogService = auditLogService;
+            _unitOfWork = unitOfWork;
         }
 
         protected override async Task HandleAsync(
             ExperimentCreatedEvent domainEvent,
             CancellationToken cancellationToken)
         {
+            //audit log
             await _auditLogService.RecordLogAsync(new CreateAuditLogRequest
             {
                 ActorUserId = domainEvent.ResearcherId,
@@ -31,12 +37,23 @@ namespace FRPAMSystem.BusinessTier.DomainEvents.Handlers
                 ReferenceType = "Experiment",
                 ReferenceId = domainEvent.ExperimentId,
                 Severity = "INFO",
-                Description = $"Tạo mới đề tài nghiên cứu ID #{domainEvent.ExperimentId} ('{domainEvent.ExperimentName}')."
+                Description = $"Create Experiment ID #{domainEvent.ExperimentId} ('{domainEvent.ExperimentName}')."
             });
+            //notification
+            var managers = await _unitOfWork
+                .GetRepository<User>()
+                .GetListAsync(
+                    selector: user => user.UserId,
+                    predicate: user => user.Role.RoleName == "Manager" && user.UserId != domainEvent.ResearcherId);
 
-            await _notificationService.SendAsync(new SendNotificationRequest
+            if (managers.Count == 0)
             {
-                UserId = domainEvent.ResearcherId,
+                return;
+            }
+
+            await _notificationService.SendToUsersAsync(new SendNotificationToUsersRequest
+            {
+                UserIds = managers,
                 Title = "Experiment created",
                 Message = $"Experiment '{domainEvent.ExperimentName}' has been created.",
                 NotificationType = NotificationTypes.ExperimentCreated,

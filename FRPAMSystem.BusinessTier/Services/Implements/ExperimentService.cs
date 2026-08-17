@@ -159,6 +159,11 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             _unitOfWork.GetRepository<Experiment>().Update(experiment);
             await _unitOfWork.CommitAsync();
 
+            await _domainEventDispatcher.DispatchAsync(new ExperimentSubmittedEvent(
+                experiment.ExperimentId,
+                experiment.ExperimentName,
+                experiment.ResearcherId));
+
             return await GetExperimentByIdAsync(id);
         }
 
