@@ -238,6 +238,26 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             return true;
         }
 
+        public async Task<ExperimentResponse?> UpdateExperimentStatusAsync(int id, UpdateExperimentStatusRequest request)
+        {
+            var experiment = await _unitOfWork
+                .GetRepository<Experiment>()
+                .FirstOrDefaultAsync(
+                    predicate: e => e.ExperimentId == id,
+                    asNoTracking: false
+                );
+
+            if (experiment == null) return null;
+
+            experiment.Status = request.Status;
+            experiment.UpdatedAt = DateTime.Now;
+
+            _unitOfWork.GetRepository<Experiment>().Update(experiment);
+            await _unitOfWork.CommitAsync();
+
+            return await GetExperimentByIdAsync(id);
+        }
+
         private async Task ValidateRequestAsync(ExperimentRequest request, int? excludeId = null)
         {
             if (string.IsNullOrWhiteSpace(request.ExperimentName))

@@ -633,9 +633,78 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             allocationPlan.FitnessScore = fitnessResult.FitnessScore;
 
             _unitOfWork.GetRepository<AllocationPlan>().Update(allocationPlan);
+
+            await UpdateEquipmentShortageLogsAsync(allocationPlan, input);
+
             await _unitOfWork.CommitAsync();
 
             return MapToResponse(allocationPlan, fitnessResult);
+        }
+
+        private async Task UpdateEquipmentShortageLogsAsync(AllocationPlan allocationPlan, OptimizationInput input)
+        {
+            var logRepo = _unitOfWork.GetRepository<EquipmentShortageLog>();
+
+            var existingLogs = await logRepo.GetQueryable()
+                .Where(l => l.AllocationPlanId == allocationPlan.AllocationPlanId)
+                .ToListAsync();
+
+            if (existingLogs.Any())
+            {
+                logRepo.DeleteRange(existingLogs);
+            }
+
+            bool hasShortage = false;
+
+            // Check Experiment Equipment Requirements
+            foreach (var req in input.ExperimentEquipmentRequirements)
+            {
+                var allocatedQuantity = allocationPlan.AllocationEquipmentDetails
+                    .Where(d => d.ExpEquipmentReqId == req.ExpEquipmentReqId)
+                    .Sum(d => d.Quantity);
+
+                if (allocatedQuantity < req.Quantity)
+                {
+                    var log = new EquipmentShortageLog
+                    {
+                        AllocationPlanId = allocationPlan.AllocationPlanId,
+                        ExpEquipmentReqId = req.ExpEquipmentReqId,
+                        ShortageQuantity = req.Quantity - allocatedQuantity,
+                        CreatedAt = DateTime.Now
+                    };
+                    await logRepo.InsertAsync(log);
+                    hasShortage = true;
+                }
+            }
+
+            // Check Phase Equipment Requirements
+            foreach (var req in input.PhaseEquipmentRequirements)
+            {
+                var allocatedQuantity = allocationPlan.AllocationEquipmentDetails
+                    .Where(d => d.PhaseEquipmentReqId == req.PhaseEquipmentReqId)
+                    .Sum(d => d.Quantity);
+
+                if (allocatedQuantity < req.Quantity)
+                {
+                    var log = new EquipmentShortageLog
+                    {
+                        AllocationPlanId = allocationPlan.AllocationPlanId,
+                        PhaseEquipmentReqId = req.PhaseEquipmentReqId,
+                        ShortageQuantity = req.Quantity - allocatedQuantity,
+                        CreatedAt = DateTime.Now
+                    };
+                    await logRepo.InsertAsync(log);
+                    hasShortage = true;
+                }
+            }
+
+            if (hasShortage)
+            {
+                await _domainEventDispatcher.DispatchAsync(new AllocationPlanShortageDetectedEvent(
+                    allocationPlan.AllocationPlanId,
+                    allocationPlan.ExperimentId,
+                    allocationPlan.Experiment?.ExperimentName));
+            }
         }
 
         private async Task<OptimizationInput> BuildOptimizationInputForPlanAsync(

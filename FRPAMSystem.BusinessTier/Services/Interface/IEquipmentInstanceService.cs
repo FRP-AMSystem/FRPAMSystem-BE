@@ -1,4 +1,4 @@
-﻿using FRPAMSystem.BusinessTier.Constants;
+using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.Payload.EquipmentInstances;
 using FRPAMSystem.DataTier.Paginate;
 using System;
@@ -25,5 +25,7 @@ namespace FRPAMSystem.BusinessTier.Services.Interface
             EquipmentInstanceRequest request);
 
         Task<bool> DeleteEquipmentInstanceAsync(int id);
+        Task<bool> ReportEquipmentAsync(ReportEquipmentRequest request);
+        Task<bool> ConfirmReportEquipmentAsync(ConfirmEquipmentRequest request);
     }
 }
