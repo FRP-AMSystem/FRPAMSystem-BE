@@ -1,4 +1,4 @@
-﻿using FRPAMSystem.BusinessTier.Constants;
+using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.Enums;
 using FRPAMSystem.BusinessTier.Payload.EquipmentInstances;
 using FRPAMSystem.BusinessTier.Services.Interface;
@@ -142,8 +142,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 EffectiveIntervalHour =request.EffectiveMaintenanceIntervalHours
         ?? equipmentType.BaseMaintenanceIntervalHours,
                 MaintenanceCount = request.MaintenanceCount,
-                Note = request.Note,
-                CreatedAt = DateTime.Now
+                Note = request.Note
             };
 
             await _unitOfWork.GetRepository<EquipmentInstance>()
@@ -271,7 +270,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 ?? newEquipmentType.BaseMaintenanceIntervalHours;
             equipmentInstance.MaintenanceCount = request.MaintenanceCount;
             equipmentInstance.Note = request.Note;
-            equipmentInstance.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<EquipmentInstance>().Update(equipmentInstance);
             _unitOfWork.GetRepository<EquipmentType>().Update(newEquipmentType);
@@ -382,7 +380,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                     break;
             }
 
-            equipmentType.UpdatedAt = DateTime.Now;
         }
 
         private static void DecreaseEquipmentTypeQuantityByStatus(
@@ -433,7 +430,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                     break;
             }
 
-            equipmentType.UpdatedAt = DateTime.Now;
         }
 
         private static void ValidateUsageValues(EquipmentInstanceRequest request)

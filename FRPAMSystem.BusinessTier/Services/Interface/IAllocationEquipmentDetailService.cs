@@ -15,7 +15,20 @@ namespace FRPAMSystem.BusinessTier.Services.Interface
             AllocationEquipmentDetailFilter filter,
             PagingModel pagingModel);
 
+        Task<IPaginate<AllocationEquipmentDetailResponse>> ViewMineAsync(
+            int userId,
+            AllocationEquipmentDetailFilter filter,
+            PagingModel pagingModel);
+
         Task<AllocationEquipmentDetailResponse?> GetAllocationEquipmentDetailByIdAsync(int id);
+
+        Task<AllocationEquipmentDetailResponse?> GetAllocationEquipmentDetailByIdForUserAsync(
+            int id,
+            int userId);
+
+        Task<AllocationEquipmentDetailResponse?> HandoverMineAsync(int id, int userId);
+
+        Task<AllocationEquipmentDetailResponse?> ReturnMineAsync(int id, int userId);
 
         Task<AllocationEquipmentDetailResponse> CreateAllocationEquipmentDetailAsync(
             AllocationEquipmentDetailRequest request);

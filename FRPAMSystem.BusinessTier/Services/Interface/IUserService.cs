@@ -8,6 +8,8 @@ namespace FRPAMSystem.BusinessTier.Services.Interface
 
         Task<UserResponse?> GetUserByIdAsync(int id);
 
+        Task<UserProfileResponse?> GetCurrentUserProfileAsync(int userId);
+
         Task<UserResponse> CreateUserAsync(CreateUserRequest request);
 
         Task<UserResponse?> UpdateUserAsync(int id, UpdateUserRequest request);

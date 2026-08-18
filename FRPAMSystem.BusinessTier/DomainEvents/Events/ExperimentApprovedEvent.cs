@@ -12,13 +12,14 @@ namespace FRPAMSystem.BusinessTier.DomainEvents.Events
             int experimentId,
             string? experimentName,
             int researcherId,
-            int? approvedBy)
+            int? approvedBy,
+            DateTime occurredAt)
         {
             ExperimentId = experimentId;
             ExperimentName = experimentName;
             ResearcherId = researcherId;
             ApprovedBy = approvedBy;
-            OccurredAt = DateTime.Now;
+            OccurredAt = occurredAt;
         }
     }
 }

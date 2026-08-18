@@ -76,8 +76,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 AreaSize = request.AreaSize,
                 Location = request.Location,
                 SoilType = request.SoilType.Trim(),
-                Status = request.Status.ToString(),
-                CreatedAt = DateTime.Now
+                Status = request.Status.ToString()
             };
 
             await _unitOfWork.GetRepository<LandResource>().InsertAsync(landResource);
@@ -110,7 +109,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             landResource.Location = request.Location;
             landResource.SoilType = request.SoilType.Trim();
             landResource.Status = request.Status.ToString();
-            landResource.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<LandResource>().Update(landResource);
             await _unitOfWork.CommitAsync();

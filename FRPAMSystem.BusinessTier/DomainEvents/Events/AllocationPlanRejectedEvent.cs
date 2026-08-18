@@ -7,14 +7,15 @@ namespace FRPAMSystem.BusinessTier.DomainEvents.Events
             int experimentId,
             string? experimentName,
             int? createdBy,
-            int rejectedBy)
+            int rejectedBy,
+            DateTime occurredAt)
         {
             AllocationPlanId = allocationPlanId;
             ExperimentId = experimentId;
             ExperimentName = experimentName;
             CreatedBy = createdBy;
             RejectedBy = rejectedBy;
-            OccurredAt = DateTime.Now;
+            OccurredAt = occurredAt;
         }
 
         public int AllocationPlanId { get; }
