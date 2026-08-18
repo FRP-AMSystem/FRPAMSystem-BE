@@ -3,6 +3,7 @@ using FRPAMSystem.BusinessTier.DomainEvents;
 using FRPAMSystem.BusinessTier.DomainEvents.Events;
 using FRPAMSystem.BusinessTier.Payload.EquipmentShortageLog;
 using FRPAMSystem.BusinessTier.Services.Interface;
+using FRPAMSystem.DataTier.Abstractions;
 using FRPAMSystem.DataTier.Models;
 using FRPAMSystem.DataTier.Paginate;
 using FRPAMSystem.DataTier.Repository.Interfaces;
@@ -14,13 +15,16 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly IDomainEventDispatcher _domainEventDispatcher;
+        private readonly IClock _clock;
 
         public EquipmentShortageLogService(
             IUnitOfWork unitOfWork,
-            IDomainEventDispatcher domainEventDispatcher)
+            IDomainEventDispatcher domainEventDispatcher,
+            IClock clock)
         {
             _unitOfWork = unitOfWork;
             _domainEventDispatcher = domainEventDispatcher;
+            _clock = clock;
         }
 
         public async Task<IPaginate<EquipmentShortageLogResponse>> ViewAllAsync(
@@ -77,7 +81,8 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             await _domainEventDispatcher.DispatchAsync(new ConflictDetectedEvent(
                 log.ShortageLogId,
                 log.AllocationPlanId,
-                log.ShortageQuantity));
+                log.ShortageQuantity,
+                _clock.Now));
 
             return MapToResponse(log);
         }

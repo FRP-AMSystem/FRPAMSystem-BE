@@ -173,7 +173,8 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 created!.AllocationPlanId,
                 created.ExperimentId,
                 created.Experiment?.ExperimentName,
-                created.CreatedBy));
+                created.CreatedBy,
+                _clock.Now));
 
             return MapToResponse(created!);
         }

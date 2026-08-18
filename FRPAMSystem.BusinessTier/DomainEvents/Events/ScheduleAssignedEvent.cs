@@ -9,7 +9,8 @@ namespace FRPAMSystem.BusinessTier.DomainEvents.Events
             string? experimentName,
             string scheduleTitle,
             int assignedHumanResourceId,
-            bool isNewAssignment)
+            bool isNewAssignment,
+            DateTime occurredAt)
         {
             ScheduleId = scheduleId;
             AllocationPlanId = allocationPlanId;
@@ -18,7 +19,7 @@ namespace FRPAMSystem.BusinessTier.DomainEvents.Events
             ScheduleTitle = scheduleTitle;
             AssignedHumanResourceId = assignedHumanResourceId;
             IsNewAssignment = isNewAssignment;
-            OccurredAt = DateTime.Now;
+            OccurredAt = occurredAt;
         }
 
 
