@@ -1,4 +1,4 @@
-﻿using FRPAMSystem.BusinessTier.Constants;
+using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.Payload.HumanResourceProfile;
 using FRPAMSystem.DataTier.Paginate;
 using System;
@@ -25,5 +25,7 @@ namespace FRPAMSystem.BusinessTier.Services.Interface
             HumanResourceProfileRequest request);
 
         Task<bool> DeleteHumanResourceProfileAsync(int id);
+
+        Task<HumanResourceProfileResponse?> SyncSkillsAsync(int id, SyncHumanResourceSkillsRequest request);
     }
 }
