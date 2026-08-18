@@ -1,4 +1,6 @@
 using FRPAMSystem.BusinessTier.Constants;
+using FRPAMSystem.BusinessTier.DomainEvents;
+using FRPAMSystem.BusinessTier.DomainEvents.Events;
 using FRPAMSystem.BusinessTier.Payload.Schedule;
 using FRPAMSystem.BusinessTier.Services.Interface;
 using FRPAMSystem.DataTier.Models;
@@ -11,10 +13,14 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
     public class ScheduleService : IScheduleService
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IDomainEventDispatcher _domainEventDispatcher;
 
-        public ScheduleService(IUnitOfWork unitOfWork)
+        public ScheduleService(
+            IUnitOfWork unitOfWork,
+            IDomainEventDispatcher domainEventDispatcher)
         {
             _unitOfWork = unitOfWork;
+            _domainEventDispatcher = domainEventDispatcher;
         }
 
         public async Task<IPaginate<ScheduleResponse>> ViewAllSchedulesAsync(
@@ -142,6 +148,21 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             await _unitOfWork.GetRepository<Schedule>().InsertAsync(schedule);
             await _unitOfWork.CommitAsync();
 
+            
+            if (schedule.AssignedHumanResourceId.HasValue)
+            {
+                var created = await LoadScheduleWithContextAsync(schedule.ScheduleId);
+
+                await _domainEventDispatcher.DispatchAsync(new ScheduleAssignedEvent(
+                    scheduleId: schedule.ScheduleId,
+                    allocationPlanId: schedule.AllocationPlanId,
+                    experimentId: created?.AllocationPlan?.ExperimentId,
+                    experimentName: created?.AllocationPlan?.Experiment?.ExperimentName,
+                    scheduleTitle: schedule.Title,
+                    assignedHumanResourceId: schedule.AssignedHumanResourceId.Value,
+                    isNewAssignment: true));
+            }
+
             return (await GetScheduleByIdAsync(schedule.ScheduleId))!;
         }
 
@@ -160,6 +181,9 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 return null;
             }
 
+           
+            var previousAssignedHumanResourceId = schedule.AssignedHumanResourceId;
+
             schedule.AllocationPlanId = request.AllocationPlanId;
             schedule.PhaseId = request.PhaseId;
             schedule.Title = request.Title.Trim();
@@ -174,6 +198,24 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
 
             _unitOfWork.GetRepository<Schedule>().Update(schedule);
             await _unitOfWork.CommitAsync();
+
+            
+            bool assignmentChanged = request.AssignedHumanResourceId.HasValue
+                && request.AssignedHumanResourceId != previousAssignedHumanResourceId;
+
+            if (assignmentChanged)
+            {
+                var updated = await LoadScheduleWithContextAsync(schedule.ScheduleId);
+
+                await _domainEventDispatcher.DispatchAsync(new ScheduleAssignedEvent(
+                    scheduleId: schedule.ScheduleId,
+                    allocationPlanId: schedule.AllocationPlanId,
+                    experimentId: updated?.AllocationPlan?.ExperimentId,
+                    experimentName: updated?.AllocationPlan?.Experiment?.ExperimentName,
+                    scheduleTitle: schedule.Title,
+                    assignedHumanResourceId: request.AssignedHumanResourceId!.Value,
+                    isNewAssignment: true));
+            }
 
             return await GetScheduleByIdAsync(id);
         }
@@ -195,6 +237,18 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             await _unitOfWork.CommitAsync();
 
             return true;
+        }
+
+        
+        private async Task<Schedule?> LoadScheduleWithContextAsync(int scheduleId)
+        {
+            return await _unitOfWork
+                .GetRepository<Schedule>()
+                .FirstOrDefaultAsync(
+                    predicate: s => s.ScheduleId == scheduleId,
+                    include: query => query
+                        .Include(s => s.AllocationPlan)
+                            .ThenInclude(p => p.Experiment));
         }
 
         private async Task ValidateRequestAsync(ScheduleRequest request)
