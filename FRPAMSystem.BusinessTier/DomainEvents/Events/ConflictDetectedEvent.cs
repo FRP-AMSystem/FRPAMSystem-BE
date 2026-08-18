@@ -10,12 +10,13 @@ namespace FRPAMSystem.BusinessTier.DomainEvents.Events
         public ConflictDetectedEvent(
             int shortageLogId,
             int allocationPlanId,
-            int shortageQuantity)
+            int shortageQuantity,
+            DateTime occurredAt)
         {
             ShortageLogId = shortageLogId;
             AllocationPlanId = allocationPlanId;
             ShortageQuantity = shortageQuantity;
-            OccurredAt = DateTime.Now;
+            OccurredAt = occurredAt;
         }
     }
 }

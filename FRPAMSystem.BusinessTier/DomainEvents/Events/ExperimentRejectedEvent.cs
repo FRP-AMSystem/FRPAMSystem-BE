@@ -14,14 +14,15 @@ namespace FRPAMSystem.BusinessTier.DomainEvents.Events
             string? experimentName,
             int researcherId,
             int? rejectedBy,
-            string? reason)
+            string? reason,
+            DateTime occurredAt)
         {
             ExperimentId = experimentId;
             ExperimentName = experimentName;
             ResearcherId = researcherId;
             RejectedBy = rejectedBy;
             Reason = reason;
-            OccurredAt = DateTime.Now;
+            OccurredAt = occurredAt;
         }
     }
 }

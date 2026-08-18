@@ -152,7 +152,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             }
 
             experiment.Status = ExperimentStatus.Submitted.ToString();
-            experiment.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<Experiment>().Update(experiment);
             await _unitOfWork.CommitAsync();
@@ -178,7 +177,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             if (experiment == null) return null;
 
             experiment.Status = ExperimentStatus.Planning.ToString(); // Or Ready
-            experiment.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<Experiment>().Update(experiment);
             await _unitOfWork.CommitAsync();
@@ -187,7 +185,8 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 experiment.ExperimentId,
                 experiment.ExperimentName,
                 experiment.ResearcherId,
-                currentUserId));
+                currentUserId,
+                _clock.Now));
 
             return await GetExperimentByIdAsync(id);
         }
@@ -204,7 +203,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             if (experiment == null) return null;
 
             experiment.Status = ExperimentStatus.Draft.ToString();
-            experiment.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<Experiment>().Update(experiment);
             await _unitOfWork.CommitAsync();
@@ -214,7 +212,8 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 experiment.ExperimentName,
                 experiment.ResearcherId,
                 currentUserId,
-                reason));
+                reason,
+                _clock.Now));
 
             return await GetExperimentByIdAsync(id);
         }
