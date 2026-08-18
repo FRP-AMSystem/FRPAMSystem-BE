@@ -3,6 +3,7 @@ using FRPAMSystem.BusinessTier.DomainEvents;
 using FRPAMSystem.BusinessTier.DomainEvents.Events;
 using FRPAMSystem.BusinessTier.Payload.Schedule;
 using FRPAMSystem.BusinessTier.Services.Interface;
+using FRPAMSystem.DataTier.Abstractions;
 using FRPAMSystem.DataTier.Models;
 using FRPAMSystem.DataTier.Paginate;
 using FRPAMSystem.DataTier.Repository.Interfaces;
@@ -14,13 +15,16 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly IDomainEventDispatcher _domainEventDispatcher;
+        private readonly IClock _clock;
 
         public ScheduleService(
             IUnitOfWork unitOfWork,
-            IDomainEventDispatcher domainEventDispatcher)
+            IDomainEventDispatcher domainEventDispatcher,
+            IClock clock)
         {
             _unitOfWork = unitOfWork;
             _domainEventDispatcher = domainEventDispatcher;
+            _clock = clock;
         }
 
         public async Task<IPaginate<ScheduleResponse>> ViewAllSchedulesAsync(
@@ -142,8 +146,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 CreatedBy = request.CreatedBy,
                 AssignedHumanResourceId = request.AssignedHumanResourceId,
                 Notes = request.Notes,
-                Priority = request.Priority,
-                CreatedAt = DateTime.Now
+                Priority = request.Priority
             };
 
             await _unitOfWork.GetRepository<Schedule>().InsertAsync(schedule);
@@ -161,7 +164,8 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                     experimentName: created?.AllocationPlan?.Experiment?.ExperimentName,
                     scheduleTitle: schedule.Title,
                     assignedHumanResourceId: schedule.AssignedHumanResourceId.Value,
-                    isNewAssignment: true));
+                    isNewAssignment: true,
+                    occurredAt: _clock.Now));
             }
 
             return (await GetScheduleByIdAsync(schedule.ScheduleId))!;
@@ -196,7 +200,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             schedule.AssignedHumanResourceId = request.AssignedHumanResourceId;
             schedule.Notes = request.Notes;
             schedule.Priority = request.Priority;
-            schedule.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<Schedule>().Update(schedule);
             await _unitOfWork.CommitAsync();
@@ -216,7 +219,8 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                     experimentName: updated?.AllocationPlan?.Experiment?.ExperimentName,
                     scheduleTitle: schedule.Title,
                     assignedHumanResourceId: request.AssignedHumanResourceId!.Value,
-                    isNewAssignment: true));
+                    isNewAssignment: true,
+                    occurredAt: _clock.Now));
             }
 
             return await GetScheduleByIdAsync(id);

@@ -7,6 +7,7 @@ using FRPAMSystem.BusinessTier.DomainEvents.Events;
 using FRPAMSystem.BusinessTier.Enums;
 using FRPAMSystem.BusinessTier.Payload.AllocationPlan;
 using FRPAMSystem.BusinessTier.Services.Interface;
+using FRPAMSystem.DataTier.Abstractions;
 using FRPAMSystem.DataTier.Models;
 using FRPAMSystem.DataTier.Paginate;
 using FRPAMSystem.DataTier.Repository.Interfaces;
@@ -25,17 +26,20 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
         private readonly IDomainEventDispatcher _domainEventDispatcher;
         private readonly IFitnessCalculator _fitnessCalculator;
         private readonly IAllocationPlanChromosomeMapper _chromosomeMapper;
+        private readonly IClock _clock;
 
         public AllocationPlanService(
             IUnitOfWork unitOfWork,
             IDomainEventDispatcher domainEventDispatcher,
             IFitnessCalculator fitnessCalculator,
-            IAllocationPlanChromosomeMapper chromosomeMapper)
+            IAllocationPlanChromosomeMapper chromosomeMapper,
+            IClock clock)
         {
             _unitOfWork = unitOfWork;
             _domainEventDispatcher = domainEventDispatcher;
             _fitnessCalculator = fitnessCalculator;
             _chromosomeMapper = chromosomeMapper;
+            _clock = clock;
         }
 
         public async Task<IPaginate<AllocationPlanResponse>> ViewAllAllocationPlansAsync(
@@ -143,8 +147,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 CreatedBy = currentUserId,
                 ApproveBy = null,
                 ApproveStatus = request.ApproveStatus.ToString(),
-                ApprovedAt = null,
-                CreatedAt = DateTime.Now
+                ApprovedAt = null
             };
 
             await _unitOfWork.GetRepository<AllocationPlan>()
@@ -170,7 +173,8 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 created!.AllocationPlanId,
                 created.ExperimentId,
                 created.Experiment?.ExperimentName,
-                created.CreatedBy));
+                created.CreatedBy,
+                _clock.Now));
 
             return MapToResponse(created!);
         }
@@ -220,7 +224,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 allocationPlan.ApprovedAt = null;
             }
 
-            allocationPlan.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<AllocationPlan>().Update(allocationPlan);
 
@@ -372,7 +375,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             allocationPlan.ApproveStatus = AllocationPlanStatus.Pending.ToString();
             allocationPlan.ApproveBy = null;
             allocationPlan.ApprovedAt = null;
-            allocationPlan.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<AllocationPlan>().Update(allocationPlan);
             await _unitOfWork.CommitAsync();
@@ -395,7 +397,8 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 submitted!.AllocationPlanId,
                 submitted.ExperimentId,
                 submitted.Experiment?.ExperimentName,
-                submitted.CreatedBy));
+                submitted.CreatedBy,
+                _clock.Now));
 
             return MapToResponse(submitted!);
         }
@@ -440,8 +443,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
 
             allocationPlan.ApproveStatus = AllocationPlanStatus.Approved.ToString();
             allocationPlan.ApproveBy = currentUserId.Value;
-            allocationPlan.ApprovedAt = DateTime.Now;
-            allocationPlan.UpdatedAt = DateTime.Now;
+            allocationPlan.ApprovedAt = _clock.Now;
 
             _unitOfWork.GetRepository<AllocationPlan>().Update(allocationPlan);
 
@@ -466,7 +468,8 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 approved.ExperimentId,
                 approved.Experiment?.ExperimentName,
                 approved.CreatedBy,
-                currentUserId.Value));
+                currentUserId.Value,
+                _clock.Now));
 
             return MapToResponse(approved!);
         }
@@ -503,7 +506,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             allocationPlan.ApproveStatus = AllocationPlanStatus.Rejected.ToString();
             allocationPlan.ApproveBy = currentUserId.Value;
             allocationPlan.ApprovedAt = null;
-            allocationPlan.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<AllocationPlan>().Update(allocationPlan);
 
@@ -528,7 +530,8 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 rejected.ExperimentId,
                 rejected.Experiment?.ExperimentName,
                 rejected.CreatedBy,
-                currentUserId.Value));
+                currentUserId.Value,
+                _clock.Now));
 
             return MapToResponse(rejected!);
         }
@@ -557,7 +560,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
 
             allocationPlan.ApproveStatus = AllocationPlanStatus.Rejected.ToString();
             allocationPlan.ApprovedAt = null;
-            allocationPlan.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<AllocationPlan>().Update(allocationPlan);
 
@@ -629,7 +631,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             var fitnessResult = _fitnessCalculator.Evaluate(chromosome, input);
 
             allocationPlan.FitnessScore = fitnessResult.FitnessScore;
-            allocationPlan.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<AllocationPlan>().Update(allocationPlan);
 

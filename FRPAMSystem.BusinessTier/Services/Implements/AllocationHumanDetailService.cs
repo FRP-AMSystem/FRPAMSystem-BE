@@ -1,4 +1,4 @@
-﻿using FRPAMSystem.BusinessTier.Constants;
+using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.Enums;
 using FRPAMSystem.BusinessTier.Payload.AllocationHumanDetail;
 using FRPAMSystem.BusinessTier.Services.Interface;
@@ -127,6 +127,23 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 .ToPaginateAsync(pagingModel.Page, pagingModel.Size, 1);
         }
 
+        public async Task<IPaginate<AllocationHumanDetailResponse>> ViewMineAsync(
+            int userId,
+            AllocationHumanDetailFilter filter,
+            PagingModel pagingModel)
+        {
+            var humanResourceId = await GetHumanResourceIdByUserIdAsync(userId);
+
+            if (!humanResourceId.HasValue)
+            {
+                throw new Exception("Human resource profile not found for current user.");
+            }
+
+            filter.HumanResourceId = humanResourceId.Value;
+
+            return await ViewAllAllocationHumanDetailsAsync(filter, pagingModel);
+        }
+
         public async Task<AllocationHumanDetailResponse?> GetAllocationHumanDetailByIdAsync(int id)
         {
             var detail = await GetDetailWithIncludesAsync(id);
@@ -137,6 +154,27 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             }
 
             return MapToResponse(detail);
+        }
+
+        public async Task<AllocationHumanDetailResponse?> GetAllocationHumanDetailByIdForUserAsync(
+            int id,
+            int userId)
+        {
+            var humanResourceId = await GetHumanResourceIdByUserIdAsync(userId);
+
+            if (!humanResourceId.HasValue)
+            {
+                return null;
+            }
+
+            var detail = await GetAllocationHumanDetailByIdAsync(id);
+
+            if (detail == null || detail.HumanResourceId != humanResourceId.Value)
+            {
+                return null;
+            }
+
+            return detail;
         }
 
         public async Task<AllocationHumanDetailResponse> CreateAllocationHumanDetailAsync(
@@ -196,8 +234,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 WorkingHours = request.WorkingHours,
                 StartDate = request.StartDate,
                 EndDate = request.EndDate,
-                Status = request.Status.ToString(),
-                CreatedAt = DateTime.Now
+                Status = request.Status.ToString()
             };
 
             await _unitOfWork.GetRepository<AllocationHumanDetail>()
@@ -282,7 +319,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             detail.StartDate = request.StartDate;
             detail.EndDate = request.EndDate;
             detail.Status = request.Status.ToString();
-            detail.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<AllocationHumanDetail>()
                 .Update(detail);
@@ -620,6 +656,15 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 throw new Exception(
                     "Human resource already has a schedule in the selected time range.");
             }
+        }
+
+        private async Task<int?> GetHumanResourceIdByUserIdAsync(int userId)
+        {
+            var profile = await _unitOfWork
+                .GetRepository<HumanResourceProfile>()
+                .FirstOrDefaultAsync(predicate: h => h.UserId == userId);
+
+            return profile?.HumanResourceId;
         }
 
         private class RequirementInfo

@@ -15,6 +15,8 @@ namespace FRPAMSystem.NotificationTests
 {
     public class RecipientResolutionTests
     {
+        private static readonly DateTime TestOccurredAt = new(2026, 5, 1, 10, 0, 0);
+
         private readonly Mock<INotificationService> _notificationServiceMock = new();
         private readonly Mock<IUnitOfWork> _unitOfWorkMock = new();
         private readonly Mock<IAuditLogService> _auditLogServiceMock = new();
@@ -55,7 +57,8 @@ namespace FRPAMSystem.NotificationTests
                 experimentName: "Pine Growth Study",
                 scheduleTitle: "Field Planting Phase 1",
                 assignedHumanResourceId: assignedHumanResourceId,
-                isNewAssignment: true);
+                isNewAssignment: true,
+                occurredAt: TestOccurredAt);
 
             SendNotificationRequest? capturedRequest = null;
             _notificationServiceMock.Setup(s => s.SendAsync(It.IsAny<SendNotificationRequest>()))
@@ -91,7 +94,8 @@ namespace FRPAMSystem.NotificationTests
                 experimentId: 10,
                 experimentName: "Acacia Breeding",
                 createdBy: creatorUserId,
-                approvedBy: approverUserId);
+                approvedBy: approverUserId,
+                occurredAt: TestOccurredAt);
 
             SendNotificationRequest? capturedRequest = null;
             _notificationServiceMock.Setup(s => s.SendAsync(It.IsAny<SendNotificationRequest>()))
@@ -125,7 +129,8 @@ namespace FRPAMSystem.NotificationTests
                 experimentId: 11,
                 experimentName: "Teak Plantation",
                 createdBy: creatorUserId,
-                rejectedBy: rejectedByUserId);
+                rejectedBy: rejectedByUserId,
+                occurredAt: TestOccurredAt);
 
             SendNotificationRequest? capturedRequest = null;
             _notificationServiceMock.Setup(s => s.SendAsync(It.IsAny<SendNotificationRequest>()))
@@ -154,7 +159,8 @@ namespace FRPAMSystem.NotificationTests
                 allocationPlanId: 50,
                 experimentId: 12,
                 experimentName: "Eucalyptus Trial",
-                createdBy: triggerUserId);
+                createdBy: triggerUserId,
+                occurredAt: TestOccurredAt);
 
             SendNotificationRequest? capturedRequest = null;
             _notificationServiceMock.Setup(s => s.SendAsync(It.IsAny<SendNotificationRequest>()))
@@ -196,7 +202,8 @@ namespace FRPAMSystem.NotificationTests
                 allocationPlanId: 77,
                 experimentId: 20,
                 experimentName: "Mangrove Restoration",
-                createdBy: 5);
+                createdBy: 5,
+                occurredAt: TestOccurredAt);
 
             SendNotificationToUsersRequest? capturedRequest = null;
             _notificationServiceMock.Setup(s => s.SendToUsersAsync(It.IsAny<SendNotificationToUsersRequest>()))
@@ -245,7 +252,8 @@ namespace FRPAMSystem.NotificationTests
             var domainEvent = new ExperimentCreatedEvent(
                 experimentId: 301,
                 experimentName: "Soil Carbon Study",
-                researcherId: researcherUserId);
+                researcherId: researcherUserId,
+                occurredAt: TestOccurredAt);
 
             SendNotificationToUsersRequest? capturedRequest = null;
             notificationServiceMock.Setup(s => s.SendToUsersAsync(It.IsAny<SendNotificationToUsersRequest>()))
@@ -294,7 +302,8 @@ namespace FRPAMSystem.NotificationTests
                 experimentName: "Invalid Assignment",
                 scheduleTitle: "Task",
                 assignedHumanResourceId: 99999, // Non-existent HR
-                isNewAssignment: true);
+                isNewAssignment: true,
+                occurredAt: TestOccurredAt);
 
             // Act
             await handler.HandleAsync(domainEvent, CancellationToken.None);

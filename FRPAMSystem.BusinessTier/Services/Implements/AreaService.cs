@@ -1,4 +1,4 @@
-﻿using FRPAMSystem.BusinessTier.Constants;
+using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.Payload.Area;
 using FRPAMSystem.BusinessTier.Services.Interface;
 using FRPAMSystem.DataTier.Models;
@@ -82,8 +82,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             var area = new Area
             {
                 AreaName = request.AreaName,
-                Description = request.Description,
-                CreatedAt = DateTime.Now
+                Description = request.Description
             };
 
             await _unitOfWork.GetRepository<Area>().InsertAsync(area);
@@ -124,7 +123,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
 
             area.AreaName = request.AreaName;
             area.Description = request.Description;
-            area.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<Area>().Update(area);
             await _unitOfWork.CommitAsync();

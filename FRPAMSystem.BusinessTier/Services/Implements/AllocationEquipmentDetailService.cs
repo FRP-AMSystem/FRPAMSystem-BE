@@ -1,4 +1,4 @@
-﻿using FRPAMSystem.BusinessTier.Constants;
+using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.Enums;
 using FRPAMSystem.BusinessTier.Payload.AllocationEquipmentDetail;
 using FRPAMSystem.BusinessTier.Services.Interface;
@@ -92,6 +92,79 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 .ToPaginateAsync(pagingModel.Page, pagingModel.Size, 1);
         }
 
+        public async Task<IPaginate<AllocationEquipmentDetailResponse>> ViewMineAsync(
+            int userId,
+            AllocationEquipmentDetailFilter filter,
+            PagingModel pagingModel)
+        {
+            var experimentIds = await GetAccessibleExperimentIdsAsync(userId);
+
+            PagingModelHelper.NormalizePaging(pagingModel);
+
+            var query = _unitOfWork
+                .GetRepository<AllocationEquipmentDetail>()
+                .GetQueryable()
+                .Include(d => d.AllocationPlan)
+                    .ThenInclude(p => p.Experiment)
+                .Include(d => d.ExpEquipmentReq)
+                    .ThenInclude(r => r.EquipmentType)
+                .Include(d => d.PhaseEquipmentReq)
+                    .ThenInclude(r => r.EquipmentType)
+                .Include(d => d.PhaseEquipmentReq)
+                    .ThenInclude(r => r.Phase)
+                .Include(d => d.AllocatedEquipmentType)
+                    .ThenInclude(t => t.EquipmentCategory)
+                .Include(d => d.EquipmentInstance)
+                .Where(d => experimentIds.Contains(d.AllocationPlan.ExperimentId))
+                .ApplyFilter(filter)
+                .AsNoTracking()
+                .OrderByDescending(d => d.CreatedAt);
+
+            return await query
+                .Select(d => new AllocationEquipmentDetailResponse
+                {
+                    AllocationEquipmentDetailId = d.AllocationEquipmentDetailId,
+                    AllocationPlanId = d.AllocationPlanId,
+                    ExperimentId = d.AllocationPlan.ExperimentId,
+                    ExperimentName = d.AllocationPlan.Experiment.ExperimentName,
+
+                    ExpEquipmentReqId = d.ExpEquipmentReqId,
+                    PhaseEquipmentReqId = d.PhaseEquipmentReqId,
+                    PhaseId = d.PhaseEquipmentReq != null ? d.PhaseEquipmentReq.PhaseId : null,
+                    PhaseName = d.PhaseEquipmentReq != null ? d.PhaseEquipmentReq.Phase.PhaseName : null,
+
+                    RequestedEquipmentTypeId = d.ExpEquipmentReq != null
+                        ? d.ExpEquipmentReq.EquipmentTypeId
+                        : d.PhaseEquipmentReq != null
+                            ? d.PhaseEquipmentReq.EquipmentTypeId
+                            : null,
+
+                    RequestedEquipmentTypeName = d.ExpEquipmentReq != null
+                        ? d.ExpEquipmentReq.EquipmentType.Name
+                        : d.PhaseEquipmentReq != null
+                            ? d.PhaseEquipmentReq.EquipmentType.Name
+                            : null,
+
+                    AllocatedEquipmentTypeId = d.AllocatedEquipmentTypeId,
+                    AllocatedEquipmentTypeName = d.AllocatedEquipmentType.Name,
+                    TrackingType = d.AllocatedEquipmentType.TrackingType,
+
+                    EquipmentInstanceId = d.EquipmentInstanceId,
+                    AssetCode = d.EquipmentInstance != null ? d.EquipmentInstance.AssetCode : null,
+                    SerialNumber = d.EquipmentInstance != null ? d.EquipmentInstance.SerialNumber : null,
+
+                    Quantity = d.Quantity,
+                    IsSubstitute = d.IsSubstitute,
+                    EfficiencyRate = d.EfficiencyRate,
+                    StartDate = d.StartDate,
+                    EndDate = d.EndDate,
+                    Status = d.Status,
+                    CreatedAt = d.CreatedAt,
+                    UpdatedAt = d.UpdatedAt
+                })
+                .ToPaginateAsync(pagingModel.Page, pagingModel.Size, 1);
+        }
+
         public async Task<AllocationEquipmentDetailResponse?> GetAllocationEquipmentDetailByIdAsync(int id)
         {
             var detail = await _unitOfWork
@@ -118,6 +191,103 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             }
 
             return MapToResponse(detail);
+        }
+
+        public async Task<AllocationEquipmentDetailResponse?> GetAllocationEquipmentDetailByIdForUserAsync(
+            int id,
+            int userId)
+        {
+            if (!await UserCanAccessDetailAsync(id, userId))
+            {
+                return null;
+            }
+
+            return await GetAllocationEquipmentDetailByIdAsync(id);
+        }
+
+        public async Task<AllocationEquipmentDetailResponse?> HandoverMineAsync(int id, int userId)
+        {
+            if (!await UserCanAccessDetailAsync(id, userId))
+            {
+                return null;
+            }
+
+            var detail = await _unitOfWork
+                .GetRepository<AllocationEquipmentDetail>()
+                .FirstOrDefaultAsync(
+                    predicate: d => d.AllocationEquipmentDetailId == id,
+                    include: query => query
+                        .Include(d => d.AllocationPlan)
+                            .ThenInclude(p => p.Experiment)
+                        .Include(d => d.EquipmentInstance),
+                    asNoTracking: false
+                );
+
+            if (detail == null)
+            {
+                return null;
+            }
+
+            if (!IsHandoverEligible(detail.Status))
+            {
+                throw new Exception(
+                    "Equipment must be in Reserved or Allocated status before handover.");
+            }
+
+            detail.Status = AllocationDetailStatus.InUse.ToString();
+
+            if (detail.EquipmentInstanceId.HasValue && detail.EquipmentInstance != null)
+            {
+                detail.EquipmentInstance.Status = EquipmentInstanceStatus.InUse.ToString();
+                _unitOfWork.GetRepository<EquipmentInstance>().Update(detail.EquipmentInstance);
+            }
+
+            _unitOfWork.GetRepository<AllocationEquipmentDetail>().Update(detail);
+            await _unitOfWork.CommitAsync();
+
+            return await GetAllocationEquipmentDetailByIdAsync(id);
+        }
+
+        public async Task<AllocationEquipmentDetailResponse?> ReturnMineAsync(int id, int userId)
+        {
+            if (!await UserCanAccessDetailAsync(id, userId))
+            {
+                return null;
+            }
+
+            var detail = await _unitOfWork
+                .GetRepository<AllocationEquipmentDetail>()
+                .FirstOrDefaultAsync(
+                    predicate: d => d.AllocationEquipmentDetailId == id,
+                    include: query => query
+                        .Include(d => d.AllocationPlan)
+                            .ThenInclude(p => p.Experiment)
+                        .Include(d => d.EquipmentInstance),
+                    asNoTracking: false
+                );
+
+            if (detail == null)
+            {
+                return null;
+            }
+
+            if (!IsReturnEligible(detail.Status))
+            {
+                throw new Exception("Equipment must be in InUse status before return.");
+            }
+
+            detail.Status = AllocationDetailStatus.Completed.ToString();
+
+            if (detail.EquipmentInstanceId.HasValue && detail.EquipmentInstance != null)
+            {
+                detail.EquipmentInstance.Status = EquipmentInstanceStatus.Available.ToString();
+                _unitOfWork.GetRepository<EquipmentInstance>().Update(detail.EquipmentInstance);
+            }
+
+            _unitOfWork.GetRepository<AllocationEquipmentDetail>().Update(detail);
+            await _unitOfWork.CommitAsync();
+
+            return await GetAllocationEquipmentDetailByIdAsync(id);
         }
 
         public async Task<AllocationEquipmentDetailResponse> CreateAllocationEquipmentDetailAsync(
@@ -196,8 +366,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 EfficiencyRate = request.EfficiencyRate,
                 StartDate = request.StartDate,
                 EndDate = request.EndDate,
-                Status = request.Status.ToString(),
-                CreatedAt = DateTime.Now
+                Status = request.Status.ToString()
             };
 
             await _unitOfWork.GetRepository<AllocationEquipmentDetail>()
@@ -301,7 +470,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             detail.StartDate = request.StartDate;
             detail.EndDate = request.EndDate;
             detail.Status = request.Status.ToString();
-            detail.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<AllocationEquipmentDetail>()
                 .Update(detail);
@@ -704,6 +872,71 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 throw new Exception(
                     "Equipment instance is already allocated in the selected time range.");
             }
+        }
+
+        private async Task<HashSet<int>> GetAccessibleExperimentIdsAsync(int userId)
+        {
+            var researcherExperimentIds = await _unitOfWork
+                .GetRepository<Experiment>()
+                .GetQueryable()
+                .Where(e => e.ResearcherId == userId)
+                .Select(e => e.ExperimentId)
+                .ToListAsync();
+
+            var humanResourceId = await GetHumanResourceIdByUserIdAsync(userId);
+            var assignedExperimentIds = new List<int>();
+
+            if (humanResourceId.HasValue)
+            {
+                assignedExperimentIds = await _unitOfWork
+                    .GetRepository<AllocationHumanDetail>()
+                    .GetQueryable()
+                    .Where(d => d.HumanResourceId == humanResourceId.Value)
+                    .Select(d => d.AllocationPlan.ExperimentId)
+                    .Distinct()
+                    .ToListAsync();
+            }
+
+            return researcherExperimentIds
+                .Concat(assignedExperimentIds)
+                .ToHashSet();
+        }
+
+        private async Task<bool> UserCanAccessDetailAsync(int allocationEquipmentDetailId, int userId)
+        {
+            var experimentIds = await GetAccessibleExperimentIdsAsync(userId);
+
+            if (experimentIds.Count == 0)
+            {
+                return false;
+            }
+
+            return await _unitOfWork
+                .GetRepository<AllocationEquipmentDetail>()
+                .AnyAsync(d =>
+                    d.AllocationEquipmentDetailId == allocationEquipmentDetailId &&
+                    experimentIds.Contains(d.AllocationPlan.ExperimentId));
+        }
+
+        private async Task<int?> GetHumanResourceIdByUserIdAsync(int userId)
+        {
+            var profile = await _unitOfWork
+                .GetRepository<HumanResourceProfile>()
+                .FirstOrDefaultAsync(predicate: h => h.UserId == userId);
+
+            return profile?.HumanResourceId;
+        }
+
+        private static bool IsHandoverEligible(string status)
+        {
+            return status == AllocationDetailStatus.Reserved.ToString() ||
+                status == AllocationDetailStatus.Allocated.ToString();
+        }
+
+        private static bool IsReturnEligible(string status)
+        {
+            return status == AllocationDetailStatus.InUse.ToString() ||
+                string.Equals(status, "Active", StringComparison.OrdinalIgnoreCase);
         }
 
         private class RequirementInfo
