@@ -1,4 +1,4 @@
-﻿using FRPAMSystem.BusinessTier.Constants;
+using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.Enums;
 using FRPAMSystem.BusinessTier.Payload.EquipmentInstances;
 using FRPAMSystem.BusinessTier.Services.Interface;
@@ -139,8 +139,10 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 UsageHoursSinceLastMaintenance = request.UsageHoursSinceMaintenance,
                 ConditionLevel = request.ConditionLevel.ToString(),
                 Status = request.Status.ToString(),
-                EffectiveIntervalHour =request.EffectiveMaintenanceIntervalHours
-        ?? equipmentType.BaseMaintenanceIntervalHours,
+                EffectiveIntervalHour = CalculateEffectiveIntervalHour(
+                    equipmentType.BaseMaintenanceIntervalHours ?? 0,
+                    request.ConditionLevel,
+                    request.MaintenanceCount),
                 MaintenanceCount = request.MaintenanceCount,
                 Note = request.Note,
                 CreatedAt = DateTime.Now
@@ -258,6 +260,12 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 }
             }
 
+            if (oldStatus == EquipmentInstanceStatus.Maintenance && request.Status == EquipmentInstanceStatus.Available)
+            {
+                request.UsageHoursSinceMaintenance = 0;
+                request.MaintenanceCount += 1;
+            }
+
             equipmentInstance.EquipmentTypeId = request.EquipmentTypeId;
             equipmentInstance.AssetCode = request.AssetCode;
             equipmentInstance.SerialNumber = request.SerialNumber;
@@ -266,9 +274,10 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             equipmentInstance.UsageHoursSinceLastMaintenance = request.UsageHoursSinceMaintenance;
             equipmentInstance.ConditionLevel = request.ConditionLevel.ToString();
             equipmentInstance.Status = request.Status.ToString();
-            equipmentInstance.EffectiveIntervalHour =
-                request.EffectiveMaintenanceIntervalHours
-                ?? newEquipmentType.BaseMaintenanceIntervalHours;
+            equipmentInstance.EffectiveIntervalHour = CalculateEffectiveIntervalHour(
+                newEquipmentType.BaseMaintenanceIntervalHours ?? 0,
+                request.ConditionLevel,
+                request.MaintenanceCount);
             equipmentInstance.MaintenanceCount = request.MaintenanceCount;
             equipmentInstance.Note = request.Note;
             equipmentInstance.UpdatedAt = DateTime.Now;
@@ -436,6 +445,95 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             equipmentType.UpdatedAt = DateTime.Now;
         }
 
+        public async Task<bool> ReportEquipmentAsync(ReportEquipmentRequest request)
+        {
+            double totalHours = 0;
+            if (request.ReportType == EquipmentInstanceStatus.Returned.ToString())
+            {
+                var schedules = await _unitOfWork.GetRepository<Schedule>()
+                    .GetQueryable()
+                    .Where(s => s.AllocationPlanId == request.AllocationPlanId && s.Status == "Completed")
+                    .ToListAsync();
+                
+                foreach (var schedule in schedules)
+                {
+                    totalHours += (schedule.EndDate - schedule.StartDate).TotalHours;
+                }
+            }
+
+            foreach (var id in request.EquipmentInstanceIds)
+            {
+                var eq = await _unitOfWork.GetRepository<EquipmentInstance>().FirstOrDefaultAsync(predicate: e => e.EquipmentInstanceId == id);
+                if (eq == null) continue;
+
+                if (request.ReportType == EquipmentInstanceStatus.Returned.ToString())
+                {
+                    eq.TotalUsageHour += totalHours;
+                    eq.UsageHoursSinceLastMaintenance += totalHours;
+
+                    if (eq.EffectiveIntervalHour.HasValue && eq.UsageHoursSinceLastMaintenance >= eq.EffectiveIntervalHour.Value)
+                    {
+                        eq.Status = EquipmentInstanceStatus.Maintenance.ToString();
+                    }
+                    else
+                    {
+                        eq.Status = EquipmentInstanceStatus.Returned.ToString();
+                    }
+                }
+                else if (request.ReportType == EquipmentInstanceStatus.Damaged.ToString())
+                {
+                    eq.Status = EquipmentInstanceStatus.Damaged.ToString();
+                    if (!string.IsNullOrEmpty(request.Note))
+                    {
+                        eq.Note = string.IsNullOrEmpty(eq.Note) ? $"[Damage Report]: {request.Note}" : eq.Note + $"\n[Damage Report]: {request.Note}";
+                    }
+                }
+                else if (request.ReportType == EquipmentInstanceStatus.Missing.ToString())
+                {
+                    eq.Status = EquipmentInstanceStatus.Missing.ToString();
+                    if (!string.IsNullOrEmpty(request.Note))
+                    {
+                        eq.Note = string.IsNullOrEmpty(eq.Note) ? $"[Missing Report]: {request.Note}" : eq.Note + $"\n[Missing Report]: {request.Note}";
+                    }
+                }
+
+                eq.UpdatedAt = DateTime.Now;
+                _unitOfWork.GetRepository<EquipmentInstance>().Update(eq);
+            }
+
+            await _unitOfWork.CommitAsync();
+            return true;
+        }
+
+        public async Task<bool> ConfirmReportEquipmentAsync(ConfirmEquipmentRequest request)
+        {
+            foreach (var id in request.EquipmentInstanceIds)
+            {
+                var eq = await _unitOfWork.GetRepository<EquipmentInstance>().FirstOrDefaultAsync(predicate: e => e.EquipmentInstanceId == id);
+                if (eq == null) continue;
+
+                if (request.ConfirmAction == "AcceptReturned" && eq.Status == EquipmentInstanceStatus.Returned.ToString())
+                {
+                    eq.Status = EquipmentInstanceStatus.Available.ToString();
+                }
+                else if (request.ConfirmAction == "SendToMaintenance")
+                {
+                    eq.Status = EquipmentInstanceStatus.Maintenance.ToString();
+                }
+
+                if (!string.IsNullOrEmpty(request.Note))
+                {
+                    eq.Note = string.IsNullOrEmpty(eq.Note) ? $"[Manager Confirm]: {request.Note}" : eq.Note + $"\n[Manager Confirm]: {request.Note}";
+                }
+
+                eq.UpdatedAt = DateTime.Now;
+                _unitOfWork.GetRepository<EquipmentInstance>().Update(eq);
+            }
+
+            await _unitOfWork.CommitAsync();
+            return true;
+        }
+
         private static void ValidateUsageValues(EquipmentInstanceRequest request)
         {
             if (request.TotalUsageHours < 0)
@@ -461,5 +559,32 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             }
         }
 
+        public static double CalculateEffectiveIntervalHour(double baseInterval, EquipmentConditionLevel condition, int maintenanceCount)
+        {
+            double conditionFactor = condition switch
+            {
+                EquipmentConditionLevel.Good => 1.0,
+                EquipmentConditionLevel.Fair => 0.85,
+                EquipmentConditionLevel.Poor => 0.6,
+                EquipmentConditionLevel.Critical => 0.3,
+                _ => 1.0
+            };
+
+            double maintenanceCountFactor = 1.0;
+            if (maintenanceCount >= 3 && maintenanceCount <= 5)
+            {
+                maintenanceCountFactor = 0.9;
+            }
+            else if (maintenanceCount >= 6 && maintenanceCount <= 10)
+            {
+                maintenanceCountFactor = 0.75;
+            }
+            else if (maintenanceCount > 10)
+            {
+                maintenanceCountFactor = 0.6;
+            }
+
+            return baseInterval * conditionFactor * maintenanceCountFactor;
+        }
     }
 }

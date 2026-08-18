@@ -1,4 +1,4 @@
-﻿using FRPAMSystem.BusinessTier.Constants;
+using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.Payload.EquipmentInstances;
 using FRPAMSystem.BusinessTier.Services.Interface;
 using Microsoft.AspNetCore.Authorization;
@@ -120,6 +120,47 @@ namespace FRPAMSystem_BE.Controllers
             {
                 success = true,
                 message = "Delete equipment instance successfully"
+            });
+        }
+        [HttpPost("report")]
+        [Authorize(Roles = "Admin,Manager,Technician,Seasonal")]
+        public async Task<IActionResult> ReportEquipment([FromBody] ReportEquipmentRequest request)
+        {
+            var result = await _equipmentInstanceService.ReportEquipmentAsync(request);
+            if (!result)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Failed to report equipment"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "Equipment reported successfully"
+            });
+        }
+
+        [HttpPost("confirm")]
+        [Authorize(Roles = "Admin,Manager")]
+        public async Task<IActionResult> ConfirmReportEquipment([FromBody] ConfirmEquipmentRequest request)
+        {
+            var result = await _equipmentInstanceService.ConfirmReportEquipmentAsync(request);
+            if (!result)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Failed to confirm equipment report"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "Equipment report confirmed successfully"
             });
         }
     }

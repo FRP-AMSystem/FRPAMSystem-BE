@@ -23,5 +23,7 @@ namespace FRPAMSystem.BusinessTier.Services.Interface
         Task<ExperimentResponse?> RejectExperimentAsync(int id, int? currentUserId, string? reason);
 
         Task<bool> DeleteExperimentAsync(int id);
+
+        Task<ExperimentResponse?> UpdateExperimentStatusAsync(int id, UpdateExperimentStatusRequest request);
     }
 }
