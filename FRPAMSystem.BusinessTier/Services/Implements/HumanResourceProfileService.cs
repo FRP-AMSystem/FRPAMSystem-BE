@@ -1,4 +1,4 @@
-﻿using FRPAMSystem.BusinessTier.Constants;
+using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.Payload.HumanResourceProfile;
 using FRPAMSystem.BusinessTier.Services.Interface;
 using FRPAMSystem.DataTier.Models;
@@ -33,6 +33,8 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 .GetQueryable()
                 .Include(h => h.User)
                     .ThenInclude(u => u.Role)
+                .Include(h => h.HumanResourceSkills)
+                    .ThenInclude(hs => hs.Skill)
                 .ApplyFilter(filter)
                 .AsNoTracking()
                 .OrderBy(h => h.User.FullName);
@@ -65,6 +67,8 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                     include: query => query
                         .Include(h => h.User)
                         .ThenInclude(u => u.Role)
+                        .Include(h => h.HumanResourceSkills)
+                        .ThenInclude(hs => hs.Skill)
                 );
 
             if (profile == null)
@@ -241,10 +245,66 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             return true;
         }
 
+        public async Task<HumanResourceProfileResponse?> SyncSkillsAsync(int id, SyncHumanResourceSkillsRequest request)
+        {
+            var profile = await _unitOfWork
+                .GetRepository<HumanResourceProfile>()
+                .FirstOrDefaultAsync(
+                    predicate: h => h.HumanResourceId == id,
+                    include: query => query
+                        .Include(h => h.User)
+                            .ThenInclude(u => u.Role)
+                        .Include(h => h.HumanResourceSkills)
+                            .ThenInclude(hs => hs.Skill),
+                    asNoTracking: false
+                );
+
+            if (profile == null)
+            {
+                return null;
+            }
+
+            // Remove existing skills
+            var existingSkills = profile.HumanResourceSkills.ToList();
+            foreach (var existingSkill in existingSkills)
+            {
+                _unitOfWork.GetRepository<HumanResourceSkill>().Delete(existingSkill);
+            }
+
+            // Validate and add new skills
+            foreach (var item in request.Skills)
+            {
+                var skillExists = await _unitOfWork
+                    .GetRepository<Skill>()
+                    .AnyAsync(s => s.SkillId == item.SkillId);
+
+                if (!skillExists)
+                {
+                    throw new Exception($"Skill with ID {item.SkillId} does not exist.");
+                }
+
+                var newSkill = new HumanResourceSkill
+                {
+                    HumanResourceId = profile.HumanResourceId,
+                    SkillId = item.SkillId,
+                    SkillLevel = item.SkillLevel.ToString()
+                };
+                
+                await _unitOfWork.GetRepository<HumanResourceSkill>().InsertAsync(newSkill);
+                profile.HumanResourceSkills.Add(newSkill);
+            }
+
+            await _unitOfWork.CommitAsync();
+
+            // Refresh to get full skill objects for response mapping
+            var updatedProfile = await GetHumanResourceProfileByIdAsync(id);
+            return updatedProfile;
+        }
+
         private static HumanResourceProfileResponse MapToResponse(
             HumanResourceProfile profile)
         {
-            return new HumanResourceProfileResponse
+            var response = new HumanResourceProfileResponse
             {
                 HumanResourceId = profile.HumanResourceId,
                 UserId = profile.UserId,
@@ -259,6 +319,25 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 CreatedAt = profile.CreatedAt,
                 UpdatedAt = profile.UpdatedAt
             };
+
+            if (profile.HumanResourceSkills != null)
+            {
+                response.Skills = profile.HumanResourceSkills.Select(hs => new FRPAMSystem.BusinessTier.Payload.HumanResourceSkill.HumanResourceSkillResponse
+                {
+                    HumanResourceSkillId = hs.HumanResourceSkillId,
+                    HumanResourceId = hs.HumanResourceId,
+                    UserId = profile.UserId,
+                    FullName = profile.User?.FullName,
+                    Username = profile.User?.Username,
+                    Email = profile.User?.Email,
+                    SkillId = hs.SkillId,
+                    SkillName = hs.Skill?.SkillName,
+                    SkillDescription = hs.Skill?.Description,
+                    SkillLevel = hs.SkillLevel.ToString()
+                }).ToList();
+            }
+
+            return response;
         }
 
         private static void ValidateHumanResourceProfileRequest(
