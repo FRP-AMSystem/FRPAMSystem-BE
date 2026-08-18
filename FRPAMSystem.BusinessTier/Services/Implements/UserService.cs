@@ -39,6 +39,29 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             return user == null ? null : MapToResponse(user);
         }
 
+        public async Task<UserProfileResponse?> GetCurrentUserProfileAsync(int userId)
+        {
+            var user = await _unitOfWork
+                .GetRepository<User>()
+                .FirstOrDefaultAsync(
+                    predicate: x => x.UserId == userId,
+                    include: x => x.Include(u => u.Role)
+                );
+
+            if (user == null)
+            {
+                return null;
+            }
+
+            return new UserProfileResponse
+            {
+                FullName = user.FullName,
+                Username = user.Username,
+                Email = user.Email,
+                RoleName = user.Role?.RoleName
+            };
+        }
+
         public async Task<UserResponse> CreateUserAsync(CreateUserRequest request)
         {
             await ValidateUserRequestAsync(
