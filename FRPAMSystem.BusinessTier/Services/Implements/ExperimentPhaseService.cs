@@ -79,8 +79,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 PhaseOrder = request.PhaseOrder,
                 ExpectedStartDate = request.ExpectedStartDate,
                 ExpectedEndDate = request.ExpectedEndDate,
-                Status = request.Status.ToString(),
-                CreatedAt = DateTime.Now
+                Status = request.Status.ToString()
             };
 
             await _unitOfWork.GetRepository<ExperimentPhase>().InsertAsync(phase);
@@ -114,7 +113,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             phase.ExpectedStartDate = request.ExpectedStartDate;
             phase.ExpectedEndDate = request.ExpectedEndDate;
             phase.Status = request.Status.ToString();
-            phase.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<ExperimentPhase>().Update(phase);
             await _unitOfWork.CommitAsync();

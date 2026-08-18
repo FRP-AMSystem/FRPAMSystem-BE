@@ -136,8 +136,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 CreatedBy = request.CreatedBy,
                 AssignedHumanResourceId = request.AssignedHumanResourceId,
                 Notes = request.Notes,
-                Priority = request.Priority,
-                CreatedAt = DateTime.Now
+                Priority = request.Priority
             };
 
             await _unitOfWork.GetRepository<Schedule>().InsertAsync(schedule);
@@ -172,7 +171,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             schedule.AssignedHumanResourceId = request.AssignedHumanResourceId;
             schedule.Notes = request.Notes;
             schedule.Priority = request.Priority;
-            schedule.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<Schedule>().Update(schedule);
             await _unitOfWork.CommitAsync();

@@ -31,8 +31,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 ReferenceId = request.ReferenceId,
                 Severity = string.IsNullOrWhiteSpace(request.Severity) ? "INFO" : request.Severity.ToUpper(),
                 Description = request.Description,
-                Metadata = request.Metadata,
-                CreatedAt = DateTime.Now
+                Metadata = request.Metadata
             };
 
             await _unitOfWork.GetRepository<AuditLog>().InsertAsync(auditLog);

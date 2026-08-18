@@ -3,6 +3,7 @@ using FRPAMSystem.BusinessTier.Payload.Email;
 using FRPAMSystem.BusinessTier.Payload.Notification;
 using FRPAMSystem.BusinessTier.Services.Interface;
 using FRPAMSystem.BusinessTier.SignalR;
+using FRPAMSystem.DataTier.Abstractions;
 using FRPAMSystem.DataTier.Models;
 using FRPAMSystem.DataTier.Paginate;
 using FRPAMSystem.DataTier.Repository.Interfaces;
@@ -18,17 +19,20 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
         private readonly IEmailService _emailService;
         private readonly IHubContext<NotificationHub, INotificationClient> _notificationHub;
         private readonly ILogger<NotificationService> _logger;
+        private readonly IClock _clock;
 
         public NotificationService(
             IUnitOfWork unitOfWork,
             IEmailService emailService,
             IHubContext<NotificationHub, INotificationClient> notificationHub,
-            ILogger<NotificationService> logger)
+            ILogger<NotificationService> logger,
+            IClock clock)
         {
             _unitOfWork = unitOfWork;
             _emailService = emailService;
             _notificationHub = notificationHub;
             _logger = logger;
+            _clock = clock;
         }
 
         public async Task<NotificationResponse> SendAsync(SendNotificationRequest request)
@@ -178,7 +182,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             }
 
             notification.IsRead = true;
-            notification.ReadAt = DateTime.Now;
+            notification.ReadAt = _clock.Now;
 
             _unitOfWork.GetRepository<Notification>().Update(notification);
             await _unitOfWork.CommitAsync();
@@ -199,7 +203,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 return 0;
             }
 
-            var now = DateTime.Now;
+            var now = _clock.Now;
             var repository = _unitOfWork.GetRepository<Notification>();
 
             foreach (var notification in unreadNotifications)
@@ -229,7 +233,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             }
 
             notification.IsDeleted = true;
-            notification.DeletedAt = DateTime.Now;
+            notification.DeletedAt = _clock.Now;
 
             _unitOfWork.GetRepository<Notification>().Update(notification);
             await _unitOfWork.CommitAsync();
@@ -355,8 +359,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 ReferenceType = string.IsNullOrWhiteSpace(referenceType) ? null : referenceType.Trim(),
                 ReferenceId = referenceId,
                 IsRead = false,
-                IsDeleted = false,
-                CreatedAt = DateTime.Now
+                IsDeleted = false
             };
         }
 

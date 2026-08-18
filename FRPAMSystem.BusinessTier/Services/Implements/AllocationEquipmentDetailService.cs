@@ -1,4 +1,4 @@
-﻿using FRPAMSystem.BusinessTier.Constants;
+using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.Enums;
 using FRPAMSystem.BusinessTier.Payload.AllocationEquipmentDetail;
 using FRPAMSystem.BusinessTier.Services.Interface;
@@ -235,12 +235,10 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             }
 
             detail.Status = AllocationDetailStatus.InUse.ToString();
-            detail.UpdatedAt = DateTime.Now;
 
             if (detail.EquipmentInstanceId.HasValue && detail.EquipmentInstance != null)
             {
                 detail.EquipmentInstance.Status = EquipmentInstanceStatus.InUse.ToString();
-                detail.EquipmentInstance.UpdatedAt = DateTime.Now;
                 _unitOfWork.GetRepository<EquipmentInstance>().Update(detail.EquipmentInstance);
             }
 
@@ -279,12 +277,10 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             }
 
             detail.Status = AllocationDetailStatus.Completed.ToString();
-            detail.UpdatedAt = DateTime.Now;
 
             if (detail.EquipmentInstanceId.HasValue && detail.EquipmentInstance != null)
             {
                 detail.EquipmentInstance.Status = EquipmentInstanceStatus.Available.ToString();
-                detail.EquipmentInstance.UpdatedAt = DateTime.Now;
                 _unitOfWork.GetRepository<EquipmentInstance>().Update(detail.EquipmentInstance);
             }
 
@@ -370,8 +366,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 EfficiencyRate = request.EfficiencyRate,
                 StartDate = request.StartDate,
                 EndDate = request.EndDate,
-                Status = request.Status.ToString(),
-                CreatedAt = DateTime.Now
+                Status = request.Status.ToString()
             };
 
             await _unitOfWork.GetRepository<AllocationEquipmentDetail>()
@@ -475,7 +470,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             detail.StartDate = request.StartDate;
             detail.EndDate = request.EndDate;
             detail.Status = request.Status.ToString();
-            detail.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<AllocationEquipmentDetail>()
                 .Update(detail);

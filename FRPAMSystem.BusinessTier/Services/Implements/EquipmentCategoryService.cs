@@ -1,4 +1,4 @@
-﻿using FRPAMSystem.BusinessTier.Constants;
+using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.Payload.EquipmentCategory;
 using FRPAMSystem.BusinessTier.Services.Interface;
 using FRPAMSystem.DataTier.Models;
@@ -83,8 +83,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             var category = new EquipmentCategory
             {
                 CategoryName = request.CategoryName,
-                Description = request.Description,
-                CreatedAt = DateTime.Now
+                Description = request.Description
             };
 
             await _unitOfWork.GetRepository<EquipmentCategory>().InsertAsync(category);
@@ -129,7 +128,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
 
             category.CategoryName = request.CategoryName;
             category.Description = request.Description;
-            category.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<EquipmentCategory>().Update(category);
             await _unitOfWork.CommitAsync();

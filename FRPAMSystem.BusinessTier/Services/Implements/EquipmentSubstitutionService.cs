@@ -73,8 +73,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 SubEquipmentTypeId = request.SubEquipmentTypeId,
                 EfficiencyRate = request.EfficiencyRate,
                 TimeMultiplier = request.TimeMultiplier,
-                Note = request.Note,
-                CreatedAt = DateTime.Now
+                Note = request.Note
             };
 
             await _unitOfWork.GetRepository<EquipmentSubstitution>().InsertAsync(substitution);
@@ -106,7 +105,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             substitution.EfficiencyRate = request.EfficiencyRate;
             substitution.TimeMultiplier = request.TimeMultiplier;
             substitution.Note = request.Note;
-            substitution.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<EquipmentSubstitution>().Update(substitution);
             await _unitOfWork.CommitAsync();

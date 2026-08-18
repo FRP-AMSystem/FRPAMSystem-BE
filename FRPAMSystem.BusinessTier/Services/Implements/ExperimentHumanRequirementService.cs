@@ -79,8 +79,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 Quantity = request.Quantity,
                 RequiredSkillId = request.RequiredSkillId,
                 WorkingHoursPerDay = request.WorkingHoursPerDay,
-                Note = request.Note,
-                CreatedAt = DateTime.Now
+                Note = request.Note
             };
 
             await _unitOfWork.GetRepository<ExperimentHumanRequirement>().InsertAsync(requirement);
@@ -113,7 +112,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             requirement.RequiredSkillId = request.RequiredSkillId;
             requirement.WorkingHoursPerDay = request.WorkingHoursPerDay;
             requirement.Note = request.Note;
-            requirement.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<ExperimentHumanRequirement>().Update(requirement);
             await _unitOfWork.CommitAsync();
