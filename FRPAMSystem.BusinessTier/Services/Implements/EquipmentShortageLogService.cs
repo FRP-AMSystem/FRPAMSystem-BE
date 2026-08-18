@@ -62,8 +62,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 AllocationPlanId = request.AllocationPlanId,
                 ExpEquipmentReqId = request.ExpEquipmentReqId,
                 PhaseEquipmentReqId = request.PhaseEquipmentReqId,
-                ShortageQuantity = request.ShortageQuantity,
-                CreatedAt = DateTime.Now
+                ShortageQuantity = request.ShortageQuantity
             };
 
             await _unitOfWork.GetRepository<EquipmentShortageLog>().InsertAsync(log);
@@ -94,7 +93,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             log.ExpEquipmentReqId = request.ExpEquipmentReqId;
             log.PhaseEquipmentReqId = request.PhaseEquipmentReqId;
             log.ShortageQuantity = request.ShortageQuantity;
-            log.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<EquipmentShortageLog>().Update(log);
             await _unitOfWork.CommitAsync();

@@ -5,12 +5,13 @@ namespace FRPAMSystem.BusinessTier.DomainEvents.Events
         public ExperimentSubmittedEvent(
             int experimentId,
             string experimentName,
-            int researcherId)
+            int researcherId,
+            DateTime occurredAt)
         {
             ExperimentId = experimentId;
             ExperimentName = experimentName;
             ResearcherId = researcherId;
-            OccurredAt = DateTime.Now;
+            OccurredAt = occurredAt;
         }
 
         public int ExperimentId { get; }
