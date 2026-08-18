@@ -250,7 +250,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             if (experiment == null) return null;
 
             experiment.Status = request.Status;
-            experiment.UpdatedAt = DateTime.Now;
+            experiment.UpdatedAt = _clock.Now;
 
             _unitOfWork.GetRepository<Experiment>().Update(experiment);
             await _unitOfWork.CommitAsync();

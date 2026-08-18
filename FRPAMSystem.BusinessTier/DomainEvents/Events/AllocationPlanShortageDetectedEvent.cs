@@ -10,12 +10,13 @@ namespace FRPAMSystem.BusinessTier.DomainEvents.Events
         public AllocationPlanShortageDetectedEvent(
             int allocationPlanId,
             int experimentId,
-            string? experimentName)
+            string? experimentName,
+            DateTime occurredAt)
         {
             AllocationPlanId = allocationPlanId;
             ExperimentId = experimentId;
             ExperimentName = experimentName;
-            OccurredAt = DateTime.Now;
+            OccurredAt = occurredAt;
         }
     }
 }
