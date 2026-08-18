@@ -1,8 +1,6 @@
-﻿using System;
+using FRPAMSystem.BusinessTier.Payload.HumanResourceSkill;
+using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace FRPAMSystem.BusinessTier.Payload.HumanResourceProfile
 {
@@ -31,5 +29,7 @@ namespace FRPAMSystem.BusinessTier.Payload.HumanResourceProfile
         public DateTime CreatedAt { get; set; }
 
         public DateTime? UpdatedAt { get; set; }
+
+        public List<HumanResourceSkillResponse> Skills { get; set; } = new();
     }
 }

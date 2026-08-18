@@ -1,4 +1,4 @@
-﻿using FRPAMSystem.BusinessTier.Constants;
+using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.Payload.HumanResourceProfile;
 using FRPAMSystem.BusinessTier.Services.Interface;
 using Microsoft.AspNetCore.Authorization;
@@ -120,6 +120,31 @@ namespace FRPAMSystem_BE.Controllers
             {
                 success = true,
                 message = "Delete human resource profile successfully"
+            });
+        }
+        [HttpPut("{id:int}/skills")]
+        [Authorize(Roles = "Admin,Manager")]
+        public async Task<IActionResult> SyncHumanResourceSkills(
+            int id,
+            [FromBody] SyncHumanResourceSkillsRequest request)
+        {
+            var result = await _humanResourceProfileService
+                .SyncSkillsAsync(id, request);
+
+            if (result == null)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "Human resource profile not found"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "Sync human resource skills successfully",
+                data = result
             });
         }
     }

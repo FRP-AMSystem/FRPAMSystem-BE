@@ -27,12 +27,9 @@ namespace FRPAMSystem.BusinessTier.DomainEvents.Handlers
         {
             var reviewers = await _unitOfWork
                 .GetRepository<User>()
-                .GetQueryable()
-                .Include(user => user.Role)
-                .Where(user => user.Role.RoleName == "Admin"
-                    || user.Role.RoleName == "Manager")
-                .Select(user => user.UserId)
-                .ToListAsync(cancellationToken);
+                .GetListAsync(
+                    selector: user => user.UserId,
+                    predicate: user => user.Role.RoleName == "Manager" && user.UserId != domainEvent.ResearcherId);
 
             if (reviewers.Count == 0)
             {

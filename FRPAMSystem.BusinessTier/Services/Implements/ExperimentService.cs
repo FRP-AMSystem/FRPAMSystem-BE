@@ -134,12 +134,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             _unitOfWork.GetRepository<Experiment>().Update(experiment);
             await _unitOfWork.CommitAsync();
 
-            await _domainEventDispatcher.DispatchAsync(new ExperimentSubmittedEvent(
-                experiment.ExperimentId,
-                experiment.ExperimentName,
-                experiment.ResearcherId,
-                _clock.Now));
-
             return await GetExperimentByIdAsync(id);
         }
 
@@ -158,9 +152,69 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             }
 
             experiment.Status = ExperimentStatus.Submitted.ToString();
+            experiment.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<Experiment>().Update(experiment);
             await _unitOfWork.CommitAsync();
+
+            await _domainEventDispatcher.DispatchAsync(new ExperimentSubmittedEvent(
+                experiment.ExperimentId,
+                experiment.ExperimentName,
+                experiment.ResearcherId,
+                _clock.Now));
+
+            return await GetExperimentByIdAsync(id);
+        }
+
+        public async Task<ExperimentResponse?> ApproveExperimentAsync(int id, int? currentUserId)
+        {
+            var experiment = await _unitOfWork
+                .GetRepository<Experiment>()
+                .FirstOrDefaultAsync(
+                    predicate: e => e.ExperimentId == id,
+                    asNoTracking: false
+                );
+
+            if (experiment == null) return null;
+
+            experiment.Status = ExperimentStatus.Planning.ToString(); // Or Ready
+            experiment.UpdatedAt = DateTime.Now;
+
+            _unitOfWork.GetRepository<Experiment>().Update(experiment);
+            await _unitOfWork.CommitAsync();
+
+            await _domainEventDispatcher.DispatchAsync(new ExperimentApprovedEvent(
+                experiment.ExperimentId,
+                experiment.ExperimentName,
+                experiment.ResearcherId,
+                currentUserId));
+
+            return await GetExperimentByIdAsync(id);
+        }
+
+        public async Task<ExperimentResponse?> RejectExperimentAsync(int id, int? currentUserId, string? reason)
+        {
+            var experiment = await _unitOfWork
+                .GetRepository<Experiment>()
+                .FirstOrDefaultAsync(
+                    predicate: e => e.ExperimentId == id,
+                    asNoTracking: false
+                );
+
+            if (experiment == null) return null;
+
+            experiment.Status = ExperimentStatus.Draft.ToString();
+            experiment.UpdatedAt = DateTime.Now;
+
+            _unitOfWork.GetRepository<Experiment>().Update(experiment);
+            await _unitOfWork.CommitAsync();
+
+            await _domainEventDispatcher.DispatchAsync(new ExperimentRejectedEvent(
+                experiment.ExperimentId,
+                experiment.ExperimentName,
+                experiment.ResearcherId,
+                currentUserId,
+                reason));
 
             return await GetExperimentByIdAsync(id);
         }

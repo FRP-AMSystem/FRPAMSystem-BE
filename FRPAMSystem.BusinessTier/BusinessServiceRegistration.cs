@@ -62,6 +62,10 @@ namespace FRPAMSystem.BusinessTier
             services.AddScoped<IDomainEventHandler, AllocationPlanSubmittedHandler>();
             services.AddScoped<IDomainEventHandler, AllocationPlanApprovedHandler>();
             services.AddScoped<IDomainEventHandler, AllocationPlanRejectedHandler>();
+            services.AddScoped<IDomainEventHandler, ExperimentApprovedHandler>();
+            services.AddScoped<IDomainEventHandler, ExperimentRejectedHandler>();
+            services.AddScoped<IDomainEventHandler, ConflictDetectedHandler>();
+            services.AddScoped<IDomainEventHandler, ScheduleAssignedHandler>();
             services.AddSingleton<IUserIdProvider, NameIdentifierUserIdProvider>();
 
             services.AddScoped<IConstraintEvaluator, LandConstraintEvaluator>();
