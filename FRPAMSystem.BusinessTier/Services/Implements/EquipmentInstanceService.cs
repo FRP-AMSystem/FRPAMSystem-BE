@@ -17,10 +17,12 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
     public class EquipmentInstanceService : IEquipmentInstanceService
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly FRPAMSystem.DataTier.Abstractions.IClock _clock;
 
-        public EquipmentInstanceService(IUnitOfWork unitOfWork)
+        public EquipmentInstanceService(IUnitOfWork unitOfWork, FRPAMSystem.DataTier.Abstractions.IClock clock)
         {
             _unitOfWork = unitOfWork;
+            _clock = clock;
         }
 
         public async Task<IPaginate<EquipmentInstanceResponse>> ViewAllEquipmentInstancesAsync(
@@ -493,6 +495,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                     }
                 }
 
+                eq.UpdatedAt = _clock.Now;
                 _unitOfWork.GetRepository<EquipmentInstance>().Update(eq);
             }
 
@@ -521,6 +524,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                     eq.Note = string.IsNullOrEmpty(eq.Note) ? $"[Manager Confirm]: {request.Note}" : eq.Note + $"\n[Manager Confirm]: {request.Note}";
                 }
 
+                eq.UpdatedAt = _clock.Now;
                 _unitOfWork.GetRepository<EquipmentInstance>().Update(eq);
             }
 
