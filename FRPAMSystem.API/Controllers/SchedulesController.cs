@@ -19,11 +19,8 @@ namespace FRPAMSystem_BE.Controllers
             _scheduleService = scheduleService;
         }
 
-        /// <summary>
-        /// Mobile calendar: schedules assigned to the logged-in user (Researcher / Student).
-        /// </summary>
         [HttpGet("mine")]
-        [Authorize(Roles = "Researcher,Student")]
+        [Authorize(Roles = "Researcher,Technician,Seasonal")]
         public async Task<IActionResult> ViewMine(
             [FromQuery] ScheduleFilter filter,
             [FromQuery] PagingModel pagingModel)
@@ -46,7 +43,7 @@ namespace FRPAMSystem_BE.Controllers
         }
 
         [HttpGet("mine/{id:int}")]
-        [Authorize(Roles = "Researcher,Student")]
+        [Authorize(Roles = "Researcher,Technician,Seasonal")]
         public async Task<IActionResult> GetMineById(int id)
         {
             var userId = GetCurrentUserId();
