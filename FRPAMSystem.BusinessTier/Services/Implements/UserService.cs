@@ -1,4 +1,4 @@
-﻿using FRPAMSystem.BusinessTier.Payload.Users;
+using FRPAMSystem.BusinessTier.Payload.Users;
 using FRPAMSystem.BusinessTier.Services.Interface;
 using FRPAMSystem.DataTier.Models;
 using FRPAMSystem.DataTier.Repository.Interfaces;
@@ -39,6 +39,29 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             return user == null ? null : MapToResponse(user);
         }
 
+        public async Task<UserProfileResponse?> GetCurrentUserProfileAsync(int userId)
+        {
+            var user = await _unitOfWork
+                .GetRepository<User>()
+                .FirstOrDefaultAsync(
+                    predicate: x => x.UserId == userId,
+                    include: x => x.Include(u => u.Role)
+                );
+
+            if (user == null)
+            {
+                return null;
+            }
+
+            return new UserProfileResponse
+            {
+                FullName = user.FullName,
+                Username = user.Username,
+                Email = user.Email,
+                RoleName = user.Role?.RoleName
+            };
+        }
+
         public async Task<UserResponse> CreateUserAsync(CreateUserRequest request)
         {
             await ValidateUserRequestAsync(
@@ -55,8 +78,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 Username = request.Username.Trim(),
                 Email = request.Email.Trim(),
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
-                RoleId = request.RoleId,
-                CreatedAt = DateTime.Now
+                RoleId = request.RoleId
             };
 
             await _unitOfWork.GetRepository<User>().InsertAsync(user);
@@ -92,7 +114,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             user.Username = request.Username.Trim();
             user.Email = request.Email.Trim();
             user.RoleId = request.RoleId;
-            user.UpdatedAt = DateTime.Now;
 
             if (!string.IsNullOrWhiteSpace(request.Password))
             {

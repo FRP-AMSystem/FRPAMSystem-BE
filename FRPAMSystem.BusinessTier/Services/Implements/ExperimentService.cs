@@ -4,6 +4,7 @@ using FRPAMSystem.BusinessTier.DomainEvents.Events;
 using FRPAMSystem.BusinessTier.Enums;
 using FRPAMSystem.BusinessTier.Payload.Experiment;
 using FRPAMSystem.BusinessTier.Services.Interface;
+using FRPAMSystem.DataTier.Abstractions;
 using FRPAMSystem.DataTier.Models;
 using FRPAMSystem.DataTier.Paginate;
 using FRPAMSystem.DataTier.Repository.Interfaces;
@@ -15,13 +16,16 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly IDomainEventDispatcher _domainEventDispatcher;
+        private readonly IClock _clock;
 
         public ExperimentService(
             IUnitOfWork unitOfWork,
-            IDomainEventDispatcher domainEventDispatcher)
+            IDomainEventDispatcher domainEventDispatcher,
+            IClock clock)
         {
             _unitOfWork = unitOfWork;
             _domainEventDispatcher = domainEventDispatcher;
+            _clock = clock;
         }
 
         public async Task<IPaginate<ExperimentResponse>> ViewAllExperimentsAsync(
@@ -87,8 +91,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 ExpectEndDate = request.ExpectEndDate,
                 Deadline = request.Deadline,
                 Priority = request.Priority,
-                Status = request.Status.ToString(),
-                CreatedAt = DateTime.Now
+                Status = request.Status.ToString()
             };
 
             await _unitOfWork.GetRepository<Experiment>().InsertAsync(experiment);
@@ -97,7 +100,8 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             await _domainEventDispatcher.DispatchAsync(new ExperimentCreatedEvent(
                 experiment.ExperimentId,
                 experiment.ExperimentName,
-                experiment.ResearcherId));
+                experiment.ResearcherId,
+                _clock.Now));
 
             return (await GetExperimentByIdAsync(experiment.ExperimentId))!;
         }
@@ -126,7 +130,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             experiment.Deadline = request.Deadline;
             experiment.Priority = request.Priority;
             experiment.Status = request.Status.ToString();
-            experiment.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<Experiment>().Update(experiment);
             await _unitOfWork.CommitAsync();
@@ -149,7 +152,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             }
 
             experiment.Status = ExperimentStatus.Submitted.ToString();
-            experiment.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<Experiment>().Update(experiment);
             await _unitOfWork.CommitAsync();
@@ -157,7 +159,8 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             await _domainEventDispatcher.DispatchAsync(new ExperimentSubmittedEvent(
                 experiment.ExperimentId,
                 experiment.ExperimentName,
-                experiment.ResearcherId));
+                experiment.ResearcherId,
+                _clock.Now));
 
             return await GetExperimentByIdAsync(id);
         }
@@ -174,7 +177,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             if (experiment == null) return null;
 
             experiment.Status = ExperimentStatus.Planning.ToString(); // Or Ready
-            experiment.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<Experiment>().Update(experiment);
             await _unitOfWork.CommitAsync();
@@ -183,7 +185,8 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 experiment.ExperimentId,
                 experiment.ExperimentName,
                 experiment.ResearcherId,
-                currentUserId));
+                currentUserId,
+                _clock.Now));
 
             return await GetExperimentByIdAsync(id);
         }
@@ -200,7 +203,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             if (experiment == null) return null;
 
             experiment.Status = ExperimentStatus.Draft.ToString();
-            experiment.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<Experiment>().Update(experiment);
             await _unitOfWork.CommitAsync();
@@ -210,7 +212,8 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 experiment.ExperimentName,
                 experiment.ResearcherId,
                 currentUserId,
-                reason));
+                reason,
+                _clock.Now));
 
             return await GetExperimentByIdAsync(id);
         }

@@ -144,8 +144,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                     request.ConditionLevel,
                     request.MaintenanceCount),
                 MaintenanceCount = request.MaintenanceCount,
-                Note = request.Note,
-                CreatedAt = DateTime.Now
+                Note = request.Note
             };
 
             await _unitOfWork.GetRepository<EquipmentInstance>()
@@ -280,7 +279,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 request.MaintenanceCount);
             equipmentInstance.MaintenanceCount = request.MaintenanceCount;
             equipmentInstance.Note = request.Note;
-            equipmentInstance.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<EquipmentInstance>().Update(equipmentInstance);
             _unitOfWork.GetRepository<EquipmentType>().Update(newEquipmentType);
@@ -391,7 +389,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                     break;
             }
 
-            equipmentType.UpdatedAt = DateTime.Now;
         }
 
         private static void DecreaseEquipmentTypeQuantityByStatus(
@@ -442,7 +439,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                     break;
             }
 
-            equipmentType.UpdatedAt = DateTime.Now;
         }
 
         public async Task<bool> ReportEquipmentAsync(ReportEquipmentRequest request)

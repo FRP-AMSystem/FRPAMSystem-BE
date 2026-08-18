@@ -76,8 +76,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 Quantity = request.Quantity,
                 AllowSubstitute = request.AllowSubstitute,
                 MinAcceptableEfficiency = request.MinAcceptableEfficiency,
-                Note = request.Note,
-                CreatedAt = DateTime.Now
+                Note = request.Note
             };
 
             await _unitOfWork.GetRepository<ExperimentEquipmentRequirement>().InsertAsync(requirement);
@@ -110,7 +109,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             requirement.AllowSubstitute = request.AllowSubstitute;
             requirement.MinAcceptableEfficiency = request.MinAcceptableEfficiency;
             requirement.Note = request.Note;
-            requirement.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<ExperimentEquipmentRequirement>().Update(requirement);
             await _unitOfWork.CommitAsync();

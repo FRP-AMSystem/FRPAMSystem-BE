@@ -1,4 +1,4 @@
-﻿using FRPAMSystem.BusinessTier.Constants;
+using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.Payload.EquipmentType;
 using FRPAMSystem.BusinessTier.Services.Interface;
 using FRPAMSystem.DataTier.Models;
@@ -114,8 +114,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 ReservedQuantity = 0,
                 InUseQuantity = 0,
                 MissingQuantity = 0,
-                Description = request.Description,
-                CreatedAt = DateTime.Now
+                Description = request.Description
             };
 
             if (request.TrackingType == EquipmentTrackingType.QuantityBased)
@@ -196,7 +195,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             equipmentType.TrackingType = request.TrackingType.ToString();
             equipmentType.BaseMaintenanceIntervalHours = request.BaseMaintenanceIntervalHours;
             equipmentType.Description = request.Description;
-            equipmentType.UpdatedAt = DateTime.Now;
 
             if (request.TrackingType == EquipmentTrackingType.QuantityBased)
             {
