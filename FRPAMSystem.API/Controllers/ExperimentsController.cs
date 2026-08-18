@@ -136,5 +136,27 @@ namespace FRPAMSystem_BE.Controllers
                 message = "Delete experiment successfully"
             });
         }
+        [HttpPut("{id:int}/status")]
+        [Authorize(Roles = "Admin,Manager,Researcher")]
+        public async Task<IActionResult> UpdateExperimentStatus(int id, [FromBody] UpdateExperimentStatusRequest request)
+        {
+            var result = await _experimentService.UpdateExperimentStatusAsync(id, request);
+
+            if (result == null)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "Experiment not found"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "Update experiment status successfully",
+                data = result
+            });
+        }
     }
 }
