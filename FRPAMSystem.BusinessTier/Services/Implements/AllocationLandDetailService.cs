@@ -1,4 +1,4 @@
-﻿using FRPAMSystem.BusinessTier.Constants;
+using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.Enums;
 using FRPAMSystem.BusinessTier.Payload.AllocationLandDetail;
 using FRPAMSystem.BusinessTier.Services.Interface;
@@ -151,8 +151,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 ExpLandReqId = request.ExpLandReqId,
                 StartDate = request.StartDate,
                 EndDate = request.EndDate,
-                Status = request.Status.ToString(),
-                CreatedAt = DateTime.Now
+                Status = request.Status.ToString()
             };
 
             await _unitOfWork.GetRepository<AllocationLandDetail>()
@@ -245,7 +244,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             detail.StartDate = request.StartDate;
             detail.EndDate = request.EndDate;
             detail.Status = request.Status.ToString();
-            detail.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<AllocationLandDetail>()
                 .Update(detail);

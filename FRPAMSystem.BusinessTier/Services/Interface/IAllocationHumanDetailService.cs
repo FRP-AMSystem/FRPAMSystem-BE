@@ -15,7 +15,16 @@ namespace FRPAMSystem.BusinessTier.Services.Interface
             AllocationHumanDetailFilter filter,
             PagingModel pagingModel);
 
+        Task<IPaginate<AllocationHumanDetailResponse>> ViewMineAsync(
+            int userId,
+            AllocationHumanDetailFilter filter,
+            PagingModel pagingModel);
+
         Task<AllocationHumanDetailResponse?> GetAllocationHumanDetailByIdAsync(int id);
+
+        Task<AllocationHumanDetailResponse?> GetAllocationHumanDetailByIdForUserAsync(
+            int id,
+            int userId);
 
         Task<AllocationHumanDetailResponse> CreateAllocationHumanDetailAsync(
             AllocationHumanDetailRequest request);

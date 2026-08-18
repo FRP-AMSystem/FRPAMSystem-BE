@@ -81,8 +81,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 PhaseId = request.PhaseId,
                 EquipmentTypeId = request.EquipmentTypeId,
                 Quantity = request.Quantity,
-                Note = request.Note,
-                CreatedAt = DateTime.Now
+                Note = request.Note
             };
 
             await _unitOfWork.GetRepository<PhaseEquipmentRequirement>()
@@ -115,7 +114,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             requirement.EquipmentTypeId = request.EquipmentTypeId;
             requirement.Quantity = request.Quantity;
             requirement.Note = request.Note;
-            requirement.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<PhaseEquipmentRequirement>().Update(requirement);
             await _unitOfWork.CommitAsync();
