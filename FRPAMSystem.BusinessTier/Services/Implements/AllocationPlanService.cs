@@ -669,8 +669,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                     {
                         AllocationPlanId = allocationPlan.AllocationPlanId,
                         ExpEquipmentReqId = req.ExpEquipmentReqId,
-                        ShortageQuantity = req.Quantity - allocatedQuantity,
-                        CreatedAt = DateTime.Now
+                        ShortageQuantity = req.Quantity - allocatedQuantity
                     };
                     await logRepo.InsertAsync(log);
                     hasShortage = true;
@@ -690,8 +689,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                     {
                         AllocationPlanId = allocationPlan.AllocationPlanId,
                         PhaseEquipmentReqId = req.PhaseEquipmentReqId,
-                        ShortageQuantity = req.Quantity - allocatedQuantity,
-                        CreatedAt = DateTime.Now
+                        ShortageQuantity = req.Quantity - allocatedQuantity
                     };
                     await logRepo.InsertAsync(log);
                     hasShortage = true;
@@ -703,7 +701,8 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 await _domainEventDispatcher.DispatchAsync(new AllocationPlanShortageDetectedEvent(
                     allocationPlan.AllocationPlanId,
                     allocationPlan.ExperimentId,
-                    allocationPlan.Experiment?.ExperimentName));
+                    allocationPlan.Experiment?.ExperimentName,
+                    _clock.Now));
             }
         }
 

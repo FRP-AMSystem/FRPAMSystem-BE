@@ -493,7 +493,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                     }
                 }
 
-                eq.UpdatedAt = DateTime.Now;
                 _unitOfWork.GetRepository<EquipmentInstance>().Update(eq);
             }
 
@@ -522,7 +521,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                     eq.Note = string.IsNullOrEmpty(eq.Note) ? $"[Manager Confirm]: {request.Note}" : eq.Note + $"\n[Manager Confirm]: {request.Note}";
                 }
 
-                eq.UpdatedAt = DateTime.Now;
                 _unitOfWork.GetRepository<EquipmentInstance>().Update(eq);
             }
 
