@@ -84,8 +84,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 RoleId = request.RoleId,
                 Quantity = request.Quantity,
                 RequiredSkillId = request.RequiredSkillId,
-                Note = request.Note,
-                CreatedAt = DateTime.Now
+                Note = request.Note
             };
 
             await _unitOfWork.GetRepository<PhaseHumanRequirement>()
@@ -119,7 +118,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             requirement.Quantity = request.Quantity;
             requirement.RequiredSkillId = request.RequiredSkillId;
             requirement.Note = request.Note;
-            requirement.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<PhaseHumanRequirement>().Update(requirement);
             await _unitOfWork.CommitAsync();

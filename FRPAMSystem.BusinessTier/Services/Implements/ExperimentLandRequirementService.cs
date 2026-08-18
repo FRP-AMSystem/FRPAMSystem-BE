@@ -67,8 +67,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 ExperimentId = request.ExperimentId,
                 RequiredArea = request.RequiredArea,
                 RequiredSoilType = request.RequiredSoilType.Trim(),
-                Note = request.Note,
-                CreatedAt = DateTime.Now
+                Note = request.Note
             };
 
             await _unitOfWork.GetRepository<ExperimentLandRequirement>().InsertAsync(requirement);
@@ -99,7 +98,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             requirement.RequiredArea = request.RequiredArea;
             requirement.RequiredSoilType = request.RequiredSoilType.Trim();
             requirement.Note = request.Note;
-            requirement.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<ExperimentLandRequirement>().Update(requirement);
             await _unitOfWork.CommitAsync();

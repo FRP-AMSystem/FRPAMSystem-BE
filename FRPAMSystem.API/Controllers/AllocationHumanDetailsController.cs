@@ -1,4 +1,5 @@
-﻿using FRPAMSystem.BusinessTier.Constants;
+﻿using System.Security.Claims;
+using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.Payload.AllocationHumanDetail;
 using FRPAMSystem.BusinessTier.Services.Interface;
 using Microsoft.AspNetCore.Authorization;
@@ -17,6 +18,64 @@ namespace FRPAMSystem_BE.Controllers
             IAllocationHumanDetailService allocationHumanDetailService)
         {
             _allocationHumanDetailService = allocationHumanDetailService;
+        }
+
+        /// <summary>
+        /// Mobile: experiments/assignments for the logged-in user (Assigned Experiment).
+        /// </summary>
+        [HttpGet("mine")]
+        [Authorize(Roles = "Researcher,Student,Technician")]
+        public async Task<IActionResult> ViewMine(
+            [FromQuery] AllocationHumanDetailFilter filter,
+            [FromQuery] PagingModel pagingModel)
+        {
+            var userId = GetCurrentUserId();
+
+            if (!userId.HasValue)
+            {
+                return Unauthorized(new { success = false, message = "Invalid user token" });
+            }
+
+            var result = await _allocationHumanDetailService
+                .ViewMineAsync(userId.Value, filter, pagingModel);
+
+            return Ok(new
+            {
+                success = true,
+                message = "Get my allocation human details successfully",
+                data = result
+            });
+        }
+
+        [HttpGet("mine/{id:int}")]
+        [Authorize(Roles = "Researcher,Student,Technician")]
+        public async Task<IActionResult> GetMineById(int id)
+        {
+            var userId = GetCurrentUserId();
+
+            if (!userId.HasValue)
+            {
+                return Unauthorized(new { success = false, message = "Invalid user token" });
+            }
+
+            var result = await _allocationHumanDetailService
+                .GetAllocationHumanDetailByIdForUserAsync(id, userId.Value);
+
+            if (result == null)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "Allocation human detail not found"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "Get allocation human detail successfully",
+                data = result
+            });
         }
 
         [HttpGet]
@@ -121,6 +180,18 @@ namespace FRPAMSystem_BE.Controllers
                 success = true,
                 message = "Delete allocation human detail successfully"
             });
+        }
+
+        private int? GetCurrentUserId()
+        {
+            var userIdValue = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (int.TryParse(userIdValue, out var userId))
+            {
+                return userId;
+            }
+
+            return null;
         }
     }
 

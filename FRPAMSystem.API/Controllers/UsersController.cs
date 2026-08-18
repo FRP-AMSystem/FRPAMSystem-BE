@@ -31,6 +31,35 @@ namespace FRPAMSystem_BE.Controllers
             });
         }
 
+        [HttpGet("me")]
+        public async Task<IActionResult> GetCurrentUser()
+        {
+            var userIdValue = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (!int.TryParse(userIdValue, out var userId))
+            {
+                return Unauthorized(new { success = false, message = "Invalid user token" });
+            }
+
+            var result = await _userService.GetCurrentUserProfileAsync(userId);
+
+            if (result == null)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "User not found"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "Get current user successfully",
+                data = result
+            });
+        }
+
         [HttpGet("{id:int}")]
         public async Task<IActionResult> GetUserById(int id)
         {
@@ -109,30 +138,6 @@ namespace FRPAMSystem_BE.Controllers
             {
                 success = true,
                 message = "Delete user successfully"
-            });
-        }
-
-        [HttpGet("me")]
-        public IActionResult GetCurrentUser()
-        {
-            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            var username = User.FindFirst(ClaimTypes.Name)?.Value;
-            var email = User.FindFirst(ClaimTypes.Email)?.Value;
-            var role = User.FindFirst(ClaimTypes.Role)?.Value;
-            var roleId = User.FindFirst("roleId")?.Value;
-
-            return Ok(new
-            {
-                success = true,
-                message = "Get current user successfully",
-                data = new
-                {
-                    userId,
-                    username,
-                    email,
-                    role,
-                    roleId
-                }
             });
         }
     }

@@ -1,4 +1,5 @@
-﻿using FRPAMSystem.BusinessTier.Constants;
+﻿using System.Security.Claims;
+using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.Payload.AllocationEquipmentDetail;
 using FRPAMSystem.BusinessTier.Services.Interface;
 using Microsoft.AspNetCore.Authorization;
@@ -17,6 +18,126 @@ namespace FRPAMSystem_BE.Controllers
             IAllocationEquipmentDetailService allocationEquipmentDetailService)
         {
             _allocationEquipmentDetailService = allocationEquipmentDetailService;
+        }
+
+        /// <summary>
+        /// Mobile: equipment allocated to experiments the user can access (Request Equipment).
+        /// </summary>
+        [HttpGet("mine")]
+        [Authorize(Roles = "Researcher,Student,Technician")]
+        public async Task<IActionResult> ViewMine(
+            [FromQuery] AllocationEquipmentDetailFilter filter,
+            [FromQuery] PagingModel pagingModel)
+        {
+            var userId = GetCurrentUserId();
+
+            if (!userId.HasValue)
+            {
+                return Unauthorized(new { success = false, message = "Invalid user token" });
+            }
+
+            var result = await _allocationEquipmentDetailService
+                .ViewMineAsync(userId.Value, filter, pagingModel);
+
+            return Ok(new
+            {
+                success = true,
+                message = "Get my allocation equipment details successfully",
+                data = result
+            });
+        }
+
+        [HttpGet("mine/{id:int}")]
+        [Authorize(Roles = "Researcher,Student,Technician")]
+        public async Task<IActionResult> GetMineById(int id)
+        {
+            var userId = GetCurrentUserId();
+
+            if (!userId.HasValue)
+            {
+                return Unauthorized(new { success = false, message = "Invalid user token" });
+            }
+
+            var result = await _allocationEquipmentDetailService
+                .GetAllocationEquipmentDetailByIdForUserAsync(id, userId.Value);
+
+            if (result == null)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "Allocation equipment detail not found"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "Get allocation equipment detail successfully",
+                data = result
+            });
+        }
+
+        [HttpPatch("mine/{id:int}/handover")]
+        [Authorize(Roles = "Researcher,Student,Technician")]
+        public async Task<IActionResult> HandoverMine(int id)
+        {
+            var userId = GetCurrentUserId();
+
+            if (!userId.HasValue)
+            {
+                return Unauthorized(new { success = false, message = "Invalid user token" });
+            }
+
+            var result = await _allocationEquipmentDetailService
+                .HandoverMineAsync(id, userId.Value);
+
+            if (result == null)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "Allocation equipment detail not found"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "Equipment handover confirmed successfully",
+                data = result
+            });
+        }
+
+        [HttpPatch("mine/{id:int}/return")]
+        [Authorize(Roles = "Researcher,Student,Technician")]
+        public async Task<IActionResult> ReturnMine(int id)
+        {
+            var userId = GetCurrentUserId();
+
+            if (!userId.HasValue)
+            {
+                return Unauthorized(new { success = false, message = "Invalid user token" });
+            }
+
+            var result = await _allocationEquipmentDetailService
+                .ReturnMineAsync(id, userId.Value);
+
+            if (result == null)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "Allocation equipment detail not found"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "Equipment returned successfully",
+                data = result
+            });
         }
 
         [HttpGet]
@@ -121,6 +242,18 @@ namespace FRPAMSystem_BE.Controllers
                 success = true,
                 message = "Delete allocation equipment detail successfully"
             });
+        }
+
+        private int? GetCurrentUserId()
+        {
+            var userIdValue = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (int.TryParse(userIdValue, out var userId))
+            {
+                return userId;
+            }
+
+            return null;
         }
     }
 }

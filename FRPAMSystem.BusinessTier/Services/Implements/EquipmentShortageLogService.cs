@@ -3,6 +3,7 @@ using FRPAMSystem.BusinessTier.DomainEvents;
 using FRPAMSystem.BusinessTier.DomainEvents.Events;
 using FRPAMSystem.BusinessTier.Payload.EquipmentShortageLog;
 using FRPAMSystem.BusinessTier.Services.Interface;
+using FRPAMSystem.DataTier.Abstractions;
 using FRPAMSystem.DataTier.Models;
 using FRPAMSystem.DataTier.Paginate;
 using FRPAMSystem.DataTier.Repository.Interfaces;
@@ -14,13 +15,16 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly IDomainEventDispatcher _domainEventDispatcher;
+        private readonly IClock _clock;
 
         public EquipmentShortageLogService(
             IUnitOfWork unitOfWork,
-            IDomainEventDispatcher domainEventDispatcher)
+            IDomainEventDispatcher domainEventDispatcher,
+            IClock clock)
         {
             _unitOfWork = unitOfWork;
             _domainEventDispatcher = domainEventDispatcher;
+            _clock = clock;
         }
 
         public async Task<IPaginate<EquipmentShortageLogResponse>> ViewAllAsync(
@@ -68,8 +72,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 AllocationPlanId = request.AllocationPlanId,
                 ExpEquipmentReqId = request.ExpEquipmentReqId,
                 PhaseEquipmentReqId = request.PhaseEquipmentReqId,
-                ShortageQuantity = request.ShortageQuantity,
-                CreatedAt = DateTime.Now
+                ShortageQuantity = request.ShortageQuantity
             };
 
             await _unitOfWork.GetRepository<EquipmentShortageLog>().InsertAsync(log);
@@ -78,7 +81,8 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             await _domainEventDispatcher.DispatchAsync(new ConflictDetectedEvent(
                 log.ShortageLogId,
                 log.AllocationPlanId,
-                log.ShortageQuantity));
+                log.ShortageQuantity,
+                _clock.Now));
 
             return MapToResponse(log);
         }
@@ -105,7 +109,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             log.ExpEquipmentReqId = request.ExpEquipmentReqId;
             log.PhaseEquipmentReqId = request.PhaseEquipmentReqId;
             log.ShortageQuantity = request.ShortageQuantity;
-            log.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<EquipmentShortageLog>().Update(log);
             await _unitOfWork.CommitAsync();

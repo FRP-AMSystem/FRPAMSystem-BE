@@ -110,8 +110,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 UserId = request.UserId,
                 MaxWorkingHoursPerDay = request.MaxWorkingHoursPerDay,
                 CurrentWorkload = request.CurrentWorkload,
-                Status = request.Status.ToString(),
-                CreatedAt = DateTime.Now
+                Status = request.Status.ToString()
             };
 
             await _unitOfWork.GetRepository<HumanResourceProfile>()
@@ -176,7 +175,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             profile.MaxWorkingHoursPerDay = request.MaxWorkingHoursPerDay;
             profile.CurrentWorkload = request.CurrentWorkload;
             profile.Status = request.Status.ToString();
-            profile.UpdatedAt = DateTime.Now;
 
             _unitOfWork.GetRepository<HumanResourceProfile>().Update(profile);
 
