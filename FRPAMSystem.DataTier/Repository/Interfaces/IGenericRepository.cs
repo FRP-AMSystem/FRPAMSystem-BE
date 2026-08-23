@@ -1,4 +1,4 @@
-﻿using FRPAMSystem.DataTier.Paginate;
+using FRPAMSystem.DataTier.Paginate;
 using Microsoft.EntityFrameworkCore.Query;
 using System;
 using System.Collections.Generic;
@@ -65,5 +65,7 @@ namespace FRPAMSystem.DataTier.Repository.Interfaces
         void Delete(T entity);
 
         void DeleteRange(IEnumerable<T> entities);
+
+        Task<int> ExecuteDeleteAsync(Expression<Func<T, bool>> predicate);
     }
 }
