@@ -1,9 +1,13 @@
+using FRPAMSystem.BusinessTier.Configuration;
 using FRPAMSystem.BusinessTier.Payload.AuditLog;
 using FRPAMSystem.BusinessTier.Services.Interface;
 using FRPAMSystem.DataTier.Models;
 using FRPAMSystem.DataTier.Paginate;
 using FRPAMSystem.DataTier.Repository.Interfaces;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System;
 using System.Linq;
 using System.Linq.Expressions;
@@ -14,31 +18,110 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
     public class AuditLogService : IAuditLogService
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IOptions<AuditLogOptions>? _options;
+        private readonly ILogger<AuditLogService>? _logger;
+        private readonly IHttpContextAccessor? _httpContextAccessor;
 
-        public AuditLogService(IUnitOfWork unitOfWork)
+        public AuditLogService(
+            IUnitOfWork unitOfWork,
+            IOptions<AuditLogOptions>? options = null,
+            ILogger<AuditLogService>? logger = null,
+            IHttpContextAccessor? httpContextAccessor = null)
         {
             _unitOfWork = unitOfWork;
+            _options = options;
+            _logger = logger;
+            _httpContextAccessor = httpContextAccessor;
         }
 
         public async Task<AuditLogResponse> RecordLogAsync(CreateAuditLogRequest request)
         {
+            int? validActorUserId = null;
+            if (request.ActorUserId.HasValue)
+            {
+                bool userExists = await _unitOfWork.GetRepository<User>().AnyAsync(u => u.UserId == request.ActorUserId.Value);
+                if (userExists)
+                {
+                    validActorUserId = request.ActorUserId.Value;
+                }
+                else
+                {
+                    _logger?.LogWarning("Audit log requested with invalid ActorUserId {ActorUserId}. Storing NULL ActorUserId to prevent database foreign key constraint failure.", request.ActorUserId.Value);
+                }
+            }
+
             var auditLog = new AuditLog
             {
-                ActorUserId = request.ActorUserId,
+                ActorUserId = validActorUserId,
                 Module = request.Module,
                 Action = request.Action,
                 ReferenceType = request.ReferenceType,
                 ReferenceId = request.ReferenceId,
-                Severity = string.IsNullOrWhiteSpace(request.Severity) ? "INFO" : request.Severity.ToUpper(),
+                Severity = NormalizeSeverity(request.Severity),
                 Description = request.Description,
-                Metadata = request.Metadata
+                Metadata = request.Metadata,
+                CreatedAt = DateTime.UtcNow
             };
 
             await _unitOfWork.GetRepository<AuditLog>().InsertAsync(auditLog);
             await _unitOfWork.CommitAsync();
 
+            var httpContext = _httpContextAccessor?.HttpContext;
+            if (httpContext != null)
+            {
+                httpContext.Items["AuditLogRecordedByDomainEvent"] = true;
+            }
+
+            await TrimAuditLogsAsync();
+
             return await GetAuditLogByIdAsync(auditLog.AuditLogId) 
                    ?? MapToResponse(auditLog);
+        }
+
+        private static string NormalizeSeverity(string? severity)
+        {
+            if (string.IsNullOrWhiteSpace(severity)) return "Information";
+
+            var s = severity.Trim().ToUpperInvariant();
+            return s switch
+            {
+                "INFO" or "INFORMATION" => "Information",
+                "WARNING" or "WARN" => "Warning",
+                "ERROR" or "FAIL" or "CRITICAL" => "Error",
+                _ => "Information"
+            };
+        }
+
+        private async Task TrimAuditLogsAsync()
+        {
+            try
+            {
+                int maxRecords = _options?.Value?.MaxRecords ?? 100;
+                if (maxRecords <= 0) return;
+
+                var repo = _unitOfWork.GetRepository<AuditLog>();
+                int totalCount = await repo.GetQueryable().CountAsync();
+
+                if (totalCount > maxRecords)
+                {
+                    int deleteCount = totalCount - maxRecords;
+                    var expiredIds = await repo.GetQueryable()
+                        .OrderBy(x => x.CreatedAt)
+                        .ThenBy(x => x.AuditLogId)
+                        .Take(deleteCount)
+                        .Select(x => x.AuditLogId)
+                        .ToListAsync();
+
+                    if (expiredIds.Count > 0)
+                    {
+                        await repo.ExecuteDeleteAsync(x => expiredIds.Contains(x.AuditLogId));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to trim expired audit log records.");
+            }
         }
 
         public async Task<IPaginate<AuditLogResponse>> GetAuditLogsAsync(AuditLogFilterRequest filter)

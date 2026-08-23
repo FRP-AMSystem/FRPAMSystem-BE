@@ -41,6 +41,12 @@ namespace FRPAMSystem_BE.Filters
                 return;
             }
 
+            // Skip HTTP audit log if a rich business audit log was already recorded by a Domain Event handler
+            if (context.HttpContext.Items.TryGetValue("AuditLogRecordedByDomainEvent", out var recorded) && recorded is true)
+            {
+                return;
+            }
+
             var actionName = context.RouteData.Values["action"]?.ToString() ?? "Unknown";
 
             // Extract ActorUserId
@@ -53,8 +59,8 @@ namespace FRPAMSystem_BE.Filters
             }
 
             var statusCode = context.HttpContext.Response.StatusCode;
-            string severity = (executedContext.Exception != null || statusCode >= 400) ? "WARNING" : "INFO";
-            if (statusCode >= 500) severity = "ERROR";
+            string severity = (executedContext.Exception != null || statusCode >= 400) ? "Warning" : "Information";
+            if (statusCode >= 500) severity = "Error";
 
             var metadataObj = new
             {
@@ -70,6 +76,9 @@ namespace FRPAMSystem_BE.Filters
 
             string description = $"{httpMethod} {context.HttpContext.Request.Path} - Status {statusCode}";
 
+            int? referenceId = ExtractReferenceId(context);
+            string referenceType = ExtractReferenceType(controllerName);
+
             try
             {
                 await _auditLogService.RecordLogAsync(new CreateAuditLogRequest
@@ -77,6 +86,8 @@ namespace FRPAMSystem_BE.Filters
                     ActorUserId = actorUserId,
                     Module = controllerName,
                     Action = actionName,
+                    ReferenceType = referenceType,
+                    ReferenceId = referenceId,
                     Severity = severity,
                     Description = description,
                     Metadata = metadataJson
@@ -90,6 +101,92 @@ namespace FRPAMSystem_BE.Filters
                     httpMethod,
                     context.HttpContext.Request.Path);
             }
+        }
+
+        private static int? ExtractReferenceId(ActionExecutingContext context)
+        {
+            foreach (var kvp in context.RouteData.Values)
+            {
+                if (kvp.Key.Equals("id", StringComparison.OrdinalIgnoreCase) || kvp.Key.EndsWith("Id", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (int.TryParse(kvp.Value?.ToString(), out int routeId))
+                    {
+                        return routeId;
+                    }
+                }
+            }
+
+            foreach (var arg in context.ActionArguments)
+            {
+                if (arg.Key.Equals("id", StringComparison.OrdinalIgnoreCase) || arg.Key.EndsWith("Id", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (arg.Value is int intVal)
+                    {
+                        return intVal;
+                    }
+                    if (int.TryParse(arg.Value?.ToString(), out int parsedArgId))
+                    {
+                        return parsedArgId;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        private static string ExtractReferenceType(string controllerName)
+        {
+            if (string.IsNullOrWhiteSpace(controllerName))
+            {
+                return "Unknown";
+            }
+
+            var controllerMapping = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "AllocationEquipmentDetails", "AllocationEquipmentDetail" },
+                { "AllocationHumanDetails", "AllocationHumanDetail" },
+                { "AllocationLandDetails", "AllocationLandDetail" },
+                { "AllocationOptimizations", "AllocationOptimization" },
+                { "AllocationPlans", "AllocationPlan" },
+                { "Areas", "Area" },
+                { "EquipmentCategories", "EquipmentCategory" },
+                { "EquipmentInstances", "EquipmentInstance" },
+                { "EquipmentShortageLogs", "EquipmentShortageLog" },
+                { "EquipmentSubstitutions", "EquipmentSubstitution" },
+                { "EquipmentTypes", "EquipmentType" },
+                { "ExperimentEquipmentRequirements", "ExperimentEquipmentRequirement" },
+                { "ExperimentHumanRequirements", "ExperimentHumanRequirement" },
+                { "ExperimentLandRequirements", "ExperimentLandRequirement" },
+                { "ExperimentPhases", "ExperimentPhase" },
+                { "Experiments", "Experiment" },
+                { "HumanResourceProfiles", "HumanResourceProfile" },
+                { "HumanResourceSkills", "HumanResourceSkill" },
+                { "LandResources", "LandResource" },
+                { "Notifications", "Notification" },
+                { "PhaseEquipmentRequirements", "PhaseEquipmentRequirement" },
+                { "PhaseHumanRequirements", "PhaseHumanRequirement" },
+                { "Roles", "Role" },
+                { "Schedules", "Schedule" },
+                { "Skills", "Skill" },
+                { "Users", "User" }
+            };
+
+            if (controllerMapping.TryGetValue(controllerName, out var mappedType))
+            {
+                return mappedType;
+            }
+
+            if (controllerName.EndsWith("ies", StringComparison.OrdinalIgnoreCase) && controllerName.Length > 3)
+            {
+                return controllerName[..^3] + "y";
+            }
+
+            if (controllerName.EndsWith("s", StringComparison.OrdinalIgnoreCase) && controllerName.Length > 1)
+            {
+                return controllerName[..^1];
+            }
+
+            return controllerName;
         }
     }
 }

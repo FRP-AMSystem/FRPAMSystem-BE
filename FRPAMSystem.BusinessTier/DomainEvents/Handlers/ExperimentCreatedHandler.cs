@@ -36,7 +36,7 @@ namespace FRPAMSystem.BusinessTier.DomainEvents.Handlers
                 Action = "CreateExperiment",
                 ReferenceType = "Experiment",
                 ReferenceId = domainEvent.ExperimentId,
-                Severity = "INFO",
+                Severity = "Information",
                 Description = $"Create Experiment ID #{domainEvent.ExperimentId} ('{domainEvent.ExperimentName}')."
             });
             //notification
