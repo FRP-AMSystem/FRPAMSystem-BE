@@ -3,6 +3,7 @@ using FRPAMSystem.BusinessTier.Payload.Notification;
 using FRPAMSystem.BusinessTier.Services.Implements;
 using FRPAMSystem.BusinessTier.Services.Interface;
 using FRPAMSystem.BusinessTier.SignalR;
+using FRPAMSystem.DataTier.Abstractions;
 using FRPAMSystem.DataTier.Models;
 using FRPAMSystem.DataTier.Repository.Interfaces;
 using Microsoft.AspNetCore.SignalR;
@@ -22,6 +23,7 @@ namespace FRPAMSystem.NotificationTests
         private readonly Mock<IHubClients<INotificationClient>> _hubClientsMock = new();
         private readonly Mock<INotificationClient> _notificationClientMock = new();
         private readonly Mock<ILogger<NotificationService>> _loggerMock = new();
+        private readonly Mock<IClock> _clockMock = new();
 
         public NotificationServiceTests()
         {
@@ -63,7 +65,8 @@ namespace FRPAMSystem.NotificationTests
                 _unitOfWorkMock.Object,
                 _emailServiceMock.Object,
                 _hubContextMock.Object,
-                _loggerMock.Object);
+                _loggerMock.Object,
+                _clockMock.Object);
 
             var request = new SendNotificationToUsersRequest
             {
@@ -133,7 +136,8 @@ namespace FRPAMSystem.NotificationTests
                 _unitOfWorkMock.Object,
                 _emailServiceMock.Object,
                 _hubContextMock.Object,
-                _loggerMock.Object);
+                _loggerMock.Object,
+                _clockMock.Object);
 
             // Act: User 1 marks their notification (101) as read
             var result = await service.MarkAsReadAsync(101, userId: 1);
@@ -184,7 +188,8 @@ namespace FRPAMSystem.NotificationTests
                 _unitOfWorkMock.Object,
                 _emailServiceMock.Object,
                 _hubContextMock.Object,
-                _loggerMock.Object);
+                _loggerMock.Object,
+                _clockMock.Object);
 
             // Act: User 2 tries to mark User 1's notification as read
             var markResult = await service.MarkAsReadAsync(101, userId: 2);
@@ -221,7 +226,8 @@ namespace FRPAMSystem.NotificationTests
                 _unitOfWorkMock.Object,
                 _emailServiceMock.Object,
                 _hubContextMock.Object,
-                _loggerMock.Object);
+                _loggerMock.Object,
+                _clockMock.Object);
 
             var request = new SendNotificationRequest
             {
