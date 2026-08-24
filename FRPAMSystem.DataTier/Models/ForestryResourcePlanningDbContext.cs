@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 
@@ -283,6 +283,8 @@ public partial class ForestryResourcePlanningDbContext : DbContext
             entity.HasOne(d => d.ActorUser).WithMany(p => p.AuditLogs)
                 .HasForeignKey(d => d.ActorUserId)
                 .HasConstraintName("FK_AuditLog_User");
+
+            entity.HasIndex(e => new { e.CreatedAt, e.AuditLogId }, "IX_AuditLog_CreatedAt_AuditLogId");
         });
 
         modelBuilder.Entity<EquipmentCategory>(entity =>
