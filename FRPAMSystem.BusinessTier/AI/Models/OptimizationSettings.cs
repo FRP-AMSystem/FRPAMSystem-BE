@@ -4,23 +4,23 @@ namespace FRPAMSystem.BusinessTier.AI.Models
     {
         public int PopulationSize { get; set; } = 100;
 
-        public int GenerationCount { get; set; } = 150;
+        public int GenerationCount { get; set; } = 80;
 
-        public double MutationRate { get; set; } = 0.08d;
+        public double MutationRate { get; set; } = 0.15d;
 
         public double InitialMutationRate { get; set; } = 0.30d;
 
         public double FinalMutationRate { get; set; } = 0.05d;
 
-        public double CrossoverRate { get; set; } = 0.75d;
+        public double CrossoverRate { get; set; } = 0.8d;
 
-        public int EliteCount { get; set; } = 5;
+        public int EliteCount { get; set; } = 10;
 
-        public int TournamentSize { get; set; } = 4;
+        public int TournamentSize { get; set; } = 5;
 
         public int TopSuggestionCount { get; set; } = 5;
 
-        public int MaxScheduleShiftDays { get; set; } = 14;
+        public int MaxScheduleShiftDays { get; set; } = 7;
 
         public double LandWeight { get; set; } = 25d;
 
