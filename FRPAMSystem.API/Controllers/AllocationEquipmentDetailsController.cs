@@ -89,24 +89,31 @@ namespace FRPAMSystem_BE.Controllers
                 return Unauthorized(new { success = false, message = "Invalid user token" });
             }
 
-            var result = await _allocationEquipmentDetailService
-                .HandoverMineAsync(id, userId.Value);
-
-            if (result == null)
+            try
             {
-                return NotFound(new
+                var result = await _allocationEquipmentDetailService
+                    .HandoverMineAsync(id, userId.Value);
+
+                if (result == null)
                 {
-                    success = false,
-                    message = "Allocation equipment detail not found"
+                    return NotFound(new
+                    {
+                        success = false,
+                        message = "Allocation equipment detail not found"
+                    });
+                }
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "Equipment handover confirmed successfully",
+                    data = result
                 });
             }
-
-            return Ok(new
+            catch (Exception ex)
             {
-                success = true,
-                message = "Equipment handover confirmed successfully",
-                data = result
-            });
+                return BadRequest(new { success = false, message = ex.Message });
+            }
         }
 
         [HttpPatch("mine/{id:int}/return")]
@@ -120,24 +127,31 @@ namespace FRPAMSystem_BE.Controllers
                 return Unauthorized(new { success = false, message = "Invalid user token" });
             }
 
-            var result = await _allocationEquipmentDetailService
-                .ReturnMineAsync(id, userId.Value);
-
-            if (result == null)
+            try
             {
-                return NotFound(new
+                var result = await _allocationEquipmentDetailService
+                    .ReturnMineAsync(id, userId.Value);
+
+                if (result == null)
                 {
-                    success = false,
-                    message = "Allocation equipment detail not found"
+                    return NotFound(new
+                    {
+                        success = false,
+                        message = "Allocation equipment detail not found"
+                    });
+                }
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "Equipment returned successfully",
+                    data = result
                 });
             }
-
-            return Ok(new
+            catch (Exception ex)
             {
-                success = true,
-                message = "Equipment returned successfully",
-                data = result
-            });
+                return BadRequest(new { success = false, message = ex.Message });
+            }
         }
 
         [HttpGet]
