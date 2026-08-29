@@ -26,6 +26,8 @@ namespace FRPAMSystem.BusinessTier
             IConfiguration configuration)
         {
             services.Configure<EmailSettings>(configuration.GetSection("Email"));
+            services.Configure<AuditLogOptions>(configuration.GetSection("AuditLog"));
+            services.AddHttpContextAccessor();
 
             services.AddScoped<IRoleService, RoleService>();
             services.AddScoped<IUserService, UserService>();
