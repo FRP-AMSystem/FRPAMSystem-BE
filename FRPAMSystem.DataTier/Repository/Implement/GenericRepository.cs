@@ -1,4 +1,4 @@
-﻿using FRPAMSystem.DataTier.Paginate;
+using FRPAMSystem.DataTier.Paginate;
 using FRPAMSystem.DataTier.Repository.Interfaces;
 using LAK.Sdk.Core.Utilities;
 using Microsoft.EntityFrameworkCore;
@@ -206,6 +206,20 @@ namespace FRPAMSystem.DataTier.Repository.Implement
         public void DeleteRange(IEnumerable<T> entities)
         {
             _dbSet.RemoveRange(entities);
+        }
+
+        public async Task<int> ExecuteDeleteAsync(Expression<Func<T, bool>> predicate)
+        {
+            try
+            {
+                return await _dbSet.Where(predicate).ExecuteDeleteAsync();
+            }
+            catch (Exception ex) when (ex is InvalidOperationException || ex is NotSupportedException)
+            {
+                var entities = await _dbSet.Where(predicate).ToListAsync();
+                _dbSet.RemoveRange(entities);
+                return await _dbContext.SaveChangesAsync();
+            }
         }
     }
 }
