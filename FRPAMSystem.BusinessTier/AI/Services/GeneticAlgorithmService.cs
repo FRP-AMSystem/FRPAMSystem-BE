@@ -45,7 +45,9 @@ namespace FRPAMSystem.BusinessTier.AI.Services
             for (var generation = 0; generation < input.Settings.GenerationCount; generation++)
             {
                 var ordered = population.Chromosomes
-                    .OrderByDescending(c => c.FitnessScore)
+                    .OrderBy(c => c.HardViolationCount)
+                    .ThenByDescending(c => c.FitnessScore)
+                    .ThenBy(c => c.SoftViolationCount)
                     .ToList();
 
                 var nextGeneration = ordered
@@ -99,7 +101,9 @@ namespace FRPAMSystem.BusinessTier.AI.Services
             }
 
             return population.Chromosomes
-                .OrderByDescending(c => c.FitnessScore)
+                .OrderBy(c => c.HardViolationCount)
+                .ThenByDescending(c => c.FitnessScore)
+                .ThenBy(c => c.SoftViolationCount)
                 .Take(input.Settings.TopSuggestionCount)
                 .Select((chromosome, index) => MapSuggestion(chromosome, input, index + 1))
                 .ToList();
@@ -130,6 +134,9 @@ namespace FRPAMSystem.BusinessTier.AI.Services
                 PenaltyScore = Math.Round(chromosome.PenaltyScore, 2),
                 BonusScore = Math.Round(chromosome.BonusScore, 2),
                 ConflictCount = chromosome.ConflictCount,
+                HardViolationCount = chromosome.HardViolationCount,
+                SoftViolationCount = chromosome.SoftViolationCount,
+                IsFeasible = chromosome.IsFeasible,
                 EstimatedCompletionTime = chromosome.Genes.Select(g => g.EndDate).DefaultIfEmpty(input.Experiment.ExpectEndDate).Max(),
                 FitnessBreakdown = new FitnessBreakdownDTO
                 {
@@ -143,6 +150,8 @@ namespace FRPAMSystem.BusinessTier.AI.Services
                 },
                 ConstraintReport = new ConstraintReportDTO
                 {
+                    HardViolationCount = chromosome.HardViolationCount,
+                    SoftViolationCount = chromosome.SoftViolationCount,
                     LandConflicts = chromosome.ConstraintReport.LandConflicts.Distinct().ToList(),
                     HumanConflicts = chromosome.ConstraintReport.HumanConflicts.Distinct().ToList(),
                     EquipmentConflicts = chromosome.ConstraintReport.EquipmentConflicts.Distinct().ToList(),

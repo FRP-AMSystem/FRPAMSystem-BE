@@ -30,12 +30,20 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness
             var weightedScore = CalculateWeightedScore(input.Settings, land, human, equipmentScore, schedule);
 
             var violations = evaluationResults.SelectMany(r => r.Result.Violations).ToList();
-            var hardPenalty = violations.Count(v => v.Severity == ConstraintSeverity.Hard) * input.Settings.HardConstraintPenalty;
-            var softPenalty = violations.Count(v => v.Severity == ConstraintSeverity.Soft) * input.Settings.SoftConstraintPenalty;
+            var hardCount = violations.Count(v => v.Severity == ConstraintSeverity.Hard);
+            var softCount = violations.Count(v => v.Severity == ConstraintSeverity.Soft);
+            var hardPenalty = hardCount * input.Settings.HardConstraintPenalty;
+            var softPenalty = softCount * input.Settings.SoftConstraintPenalty;
             var evaluatorPenalty = evaluationResults.Sum(r => r.Result.Penalty);
             var penalty = (hardPenalty + softPenalty + evaluatorPenalty) * input.Settings.PenaltyWeight;
             var bonus = evaluationResults.Sum(r => r.Result.Bonus) * input.Settings.BonusWeight;
             var finalScore = Math.Clamp(weightedScore - penalty + bonus, 0d, 100d);
+
+            var advantages = evaluationResults.SelectMany(r => r.Result.Advantages).Distinct().Take(8).ToList();
+            if (hardCount == 0 && !advantages.Contains("Allocation candidate is fully feasible with zero hard constraint violations."))
+            {
+                advantages.Insert(0, "Allocation candidate is fully feasible with zero hard constraint violations.");
+            }
 
             var result = new FitnessResult
             {
@@ -47,7 +55,9 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness
                 EquipmentScore = Math.Round(equipmentScore, 2),
                 ScheduleScore = Math.Round(schedule, 2),
                 ConflictCount = violations.Count,
-                Advantages = evaluationResults.SelectMany(r => r.Result.Advantages).Distinct().Take(8).ToList(),
+                HardViolationCount = hardCount,
+                SoftViolationCount = softCount,
+                Advantages = advantages,
                 Disadvantages = evaluationResults.SelectMany(r => r.Result.Disadvantages).Distinct().Take(12).ToList()
             };
 
@@ -102,7 +112,11 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness
             ConstraintReport report,
             IEnumerable<ConstraintViolation> violations)
         {
-            foreach (var violation in violations)
+            var violationList = violations.ToList();
+            report.HardViolationCount = violationList.Count(v => v.Severity == ConstraintSeverity.Hard);
+            report.SoftViolationCount = violationList.Count(v => v.Severity == ConstraintSeverity.Soft);
+
+            foreach (var violation in violationList)
             {
                 var target = violation.Category switch
                 {
@@ -129,6 +143,8 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness
             chromosome.FitnessScore = result.FitnessScore;
             chromosome.PenaltyScore = result.PenaltyScore;
             chromosome.ConflictCount = result.ConflictCount;
+            chromosome.HardViolationCount = result.HardViolationCount;
+            chromosome.SoftViolationCount = result.SoftViolationCount;
             chromosome.LandScore = result.LandScore;
             chromosome.HumanScore = result.HumanScore;
             chromosome.EquipmentScore = result.EquipmentScore;

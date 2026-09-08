@@ -25,8 +25,20 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness.Evaluators
                 foreach (var requirement in requirements)
                 {
                     var assignments = gene.EquipmentAssignments
-                        .Where(e => e.PhaseEquipmentRequirementId == requirement.PhaseEquipmentRequirementId ||
-                                    e.ExperimentEquipmentRequirementId == requirement.ExperimentEquipmentRequirementId)
+                        .Where(e =>
+                        {
+                            if (requirement.PhaseEquipmentRequirementId.HasValue)
+                            {
+                                return e.PhaseEquipmentRequirementId == requirement.PhaseEquipmentRequirementId.Value;
+                            }
+
+                            if (requirement.ExperimentEquipmentRequirementId.HasValue)
+                            {
+                                return e.ExperimentEquipmentRequirementId == requirement.ExperimentEquipmentRequirementId.Value;
+                            }
+
+                            return e.RequiredEquipmentTypeId == requirement.EquipmentTypeId;
+                        })
                         .ToList();
 
                     var typeScore = EvaluateQuantity(requirement, assignments, equipmentTypes, result, gene.PhaseId);
@@ -54,11 +66,15 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness.Evaluators
                             if (requirement.MinAcceptableEfficiency.HasValue &&
                                 efficiencyRate < requirement.MinAcceptableEfficiency.Value)
                             {
-                                Add(result, ConstraintSeverity.Soft, $"Equipment {instance.AssetCode} substitute efficiency is below the minimum.");
+                                Add(result, ConstraintSeverity.Hard, $"Equipment {instance.AssetCode} substitute efficiency is below the minimum.");
+                                assignmentScore -= 20d;
+                            }
+                            else
+                            {
+                                result.Disadvantages.Add($"Equipment {instance.AssetCode} is a substitute allocation ({efficiencyRate:P0} efficiency).");
                             }
 
                             assignmentScore = (assignmentScore + 20d) * Math.Clamp(efficiencyRate, 0d, 1d);
-                            Add(result, ConstraintSeverity.Soft, $"Equipment {instance.AssetCode} is a substitute allocation.");
                         }
                         else
                         {

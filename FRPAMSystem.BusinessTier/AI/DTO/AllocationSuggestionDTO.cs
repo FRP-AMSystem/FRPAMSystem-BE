@@ -16,6 +16,12 @@ namespace FRPAMSystem.BusinessTier.AI.DTO
 
         public int ConflictCount { get; set; }
 
+        public int HardViolationCount { get; set; }
+
+        public int SoftViolationCount { get; set; }
+
+        public bool IsFeasible { get; set; }
+
         public DateTime EstimatedCompletionTime { get; set; }
 
         public List<AllocatedLandDTO> AllocatedLands { get; set; } = new();
@@ -50,6 +56,12 @@ namespace FRPAMSystem.BusinessTier.AI.DTO
 
     public class ConstraintReportDTO
     {
+        public int HardViolationCount { get; set; }
+
+        public int SoftViolationCount { get; set; }
+
+        public bool IsFeasible => HardViolationCount == 0;
+
         public List<string> LandConflicts { get; set; } = new();
 
         public List<string> HumanConflicts { get; set; } = new();
