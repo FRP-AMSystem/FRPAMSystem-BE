@@ -3,7 +3,7 @@ using FRPAMSystem.DataTier.Models;
 
 namespace FRPAMSystem.BusinessTier.AI.Fitness.Evaluators
 {
-    internal static class FitnessEvaluationHelper
+    public static class FitnessEvaluationHelper
     {
         public static IEnumerable<HumanRequirementSnapshot> GetHumanRequirements(int phaseId, OptimizationInput input)
         {
@@ -25,7 +25,13 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness.Evaluators
         {
             var phaseRequirements = input.PhaseEquipmentRequirements
                 .Where(r => r.PhaseId == phaseId)
-                .Select(r => new EquipmentRequirementSnapshot(r.PhaseEquipmentReqId, null, r.EquipmentTypeId, r.Quantity, true, null))
+                .Select(r =>
+                {
+                    var expReq = input.ExperimentEquipmentRequirements.FirstOrDefault(er => er.EquipmentTypeId == r.EquipmentTypeId);
+                    var allowSubstitute = expReq?.AllowSubstitute ?? true;
+                    var minEfficiency = expReq?.MinAcceptableEfficiency;
+                    return new EquipmentRequirementSnapshot(r.PhaseEquipmentReqId, null, r.EquipmentTypeId, r.Quantity, allowSubstitute, minEfficiency);
+                })
                 .ToList();
 
             if (phaseRequirements.Count > 0)
@@ -59,7 +65,7 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness.Evaluators
 
         public static bool Overlaps(DateTime startA, DateTime endA, DateTime startB, DateTime endB)
         {
-            return startA <= endB && startB <= endA;
+            return startA.Date < endB.Date && startB.Date < endA.Date;
         }
 
         public static int CountInternalOverlaps(IEnumerable<(int? ResourceId, DateTime StartDate, DateTime EndDate)> bookings)
@@ -67,12 +73,15 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness.Evaluators
             var conflicts = 0;
             foreach (var group in bookings.Where(b => b.ResourceId.HasValue).GroupBy(b => b.ResourceId!.Value))
             {
-                var ordered = group.OrderBy(g => g.StartDate).ToList();
-                for (var i = 1; i < ordered.Count; i++)
+                var list = group.ToList();
+                for (var i = 0; i < list.Count; i++)
                 {
-                    if (Overlaps(ordered[i - 1].StartDate, ordered[i - 1].EndDate, ordered[i].StartDate, ordered[i].EndDate))
+                    for (var j = i + 1; j < list.Count; j++)
                     {
-                        conflicts++;
+                        if (Overlaps(list[i].StartDate, list[i].EndDate, list[j].StartDate, list[j].EndDate))
+                        {
+                            conflicts++;
+                        }
                     }
                 }
             }
@@ -119,7 +128,7 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness.Evaluators
         }
     }
 
-    internal sealed record HumanRequirementSnapshot(
+    public sealed record HumanRequirementSnapshot(
         int? PhaseHumanRequirementId,
         int? ExperimentHumanRequirementId,
         int RoleId,
@@ -127,7 +136,7 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness.Evaluators
         int Quantity,
         double? WorkingHoursPerDay);
 
-    internal sealed record EquipmentRequirementSnapshot(
+    public sealed record EquipmentRequirementSnapshot(
         int? PhaseEquipmentRequirementId,
         int? ExperimentEquipmentRequirementId,
         int EquipmentTypeId,

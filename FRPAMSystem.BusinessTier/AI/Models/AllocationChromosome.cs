@@ -20,6 +20,12 @@ namespace FRPAMSystem.BusinessTier.AI.Models
 
         public int ConflictCount { get; set; }
 
+        public int HardViolationCount { get; set; }
+
+        public int SoftViolationCount { get; set; }
+
+        public bool IsFeasible => HardViolationCount == 0;
+
         public FitnessBreakdown FitnessBreakdown { get; set; } = new();
 
         public ConstraintReport ConstraintReport { get; set; } = new();
@@ -41,6 +47,8 @@ namespace FRPAMSystem.BusinessTier.AI.Models
                 EquipmentScore = EquipmentScore,
                 ScheduleScore = ScheduleScore,
                 ConflictCount = ConflictCount,
+                HardViolationCount = HardViolationCount,
+                SoftViolationCount = SoftViolationCount,
                 FitnessBreakdown = new FitnessBreakdown
                 {
                     LandScore = FitnessBreakdown.LandScore,
