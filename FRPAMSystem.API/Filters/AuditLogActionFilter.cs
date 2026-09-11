@@ -151,6 +151,8 @@ namespace FRPAMSystem_BE.Filters
                 { "Areas", "Area" },
                 { "EquipmentCategories", "EquipmentCategory" },
                 { "EquipmentInstances", "EquipmentInstance" },
+                { "EquipmentHandovers", "EquipmentHandover" },
+                { "EquipmentReturns", "EquipmentReturn" },
                 { "EquipmentShortageLogs", "EquipmentShortageLog" },
                 { "EquipmentSubstitutions", "EquipmentSubstitution" },
                 { "EquipmentTypes", "EquipmentType" },
