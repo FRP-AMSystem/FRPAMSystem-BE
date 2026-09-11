@@ -29,7 +29,15 @@ public partial class ForestryResourcePlanningDbContext : DbContext
 
     public virtual DbSet<EquipmentCategory> EquipmentCategories { get; set; }
 
+    public virtual DbSet<EquipmentChangeRequest> EquipmentChangeRequests { get; set; }
+
+    public virtual DbSet<EquipmentExtensionRequest> EquipmentExtensionRequests { get; set; }
+
+    public virtual DbSet<EquipmentHandover> EquipmentHandovers { get; set; }
+
     public virtual DbSet<EquipmentInstance> EquipmentInstances { get; set; }
+
+    public virtual DbSet<EquipmentReturn> EquipmentReturns { get; set; }
 
     public virtual DbSet<EquipmentShortageLog> EquipmentShortageLogs { get; set; }
 
@@ -341,6 +349,206 @@ public partial class ForestryResourcePlanningDbContext : DbContext
                 .HasForeignKey(d => d.EquipmentTypeId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_EquipmentInstance_EquipmentType");
+        });
+
+        modelBuilder.Entity<EquipmentChangeRequest>(entity =>
+        {
+            entity.HasKey(e => e.ChangeRequestId).HasName("PK_EquipmentChangeRequest");
+
+            entity.ToTable("EquipmentChangeRequest");
+
+            entity.Property(e => e.ChangeRequestId).HasColumnName("change_request_id");
+            entity.Property(e => e.AllocationEquipmentDetailId).HasColumnName("allocation_equipment_detail_id");
+            entity.Property(e => e.CurrentEquipmentInstanceId).HasColumnName("current_equipment_instance_id");
+            entity.Property(e => e.RequestedEquipmentTypeId).HasColumnName("requested_equipment_type_id");
+            entity.Property(e => e.RequestedEquipmentInstanceId).HasColumnName("requested_equipment_instance_id");
+            entity.Property(e => e.RequestedBy).HasColumnName("requested_by");
+            entity.Property(e => e.Reason).HasColumnName("reason");
+            entity.Property(e => e.Status)
+                .HasMaxLength(50)
+                .HasDefaultValue("Pending")
+                .HasColumnName("status");
+            entity.Property(e => e.ReviewedBy).HasColumnName("reviewed_by");
+            entity.Property(e => e.ReviewedAt).HasColumnName("reviewed_at");
+            entity.Property(e => e.RejectionReason).HasColumnName("rejection_reason");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasOne(d => d.AllocationEquipmentDetail).WithMany(p => p.EquipmentChangeRequests)
+                .HasForeignKey(d => d.AllocationEquipmentDetailId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_EquipmentChangeRequest_AllocationEquipmentDetail");
+
+            entity.HasOne(d => d.CurrentEquipmentInstance).WithMany(p => p.EquipmentChangeRequestCurrentEquipmentInstances)
+                .HasForeignKey(d => d.CurrentEquipmentInstanceId)
+                .HasConstraintName("FK_EquipmentChangeRequest_CurrentEquipment");
+
+            entity.HasOne(d => d.RequestedEquipmentType).WithMany(p => p.EquipmentChangeRequests)
+                .HasForeignKey(d => d.RequestedEquipmentTypeId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_EquipmentChangeRequest_RequestedEquipmentType");
+
+            entity.HasOne(d => d.RequestedEquipmentInstance).WithMany(p => p.EquipmentChangeRequestRequestedEquipmentInstances)
+                .HasForeignKey(d => d.RequestedEquipmentInstanceId)
+                .HasConstraintName("FK_EquipmentChangeRequest_RequestedEquipmentInstance");
+
+            entity.HasOne(d => d.RequestedByNavigation).WithMany(p => p.EquipmentChangeRequestRequestedByNavigations)
+                .HasForeignKey(d => d.RequestedBy)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_EquipmentChangeRequest_RequestedBy");
+
+            entity.HasOne(d => d.ReviewedByNavigation).WithMany(p => p.EquipmentChangeRequestReviewedByNavigations)
+                .HasForeignKey(d => d.ReviewedBy)
+                .HasConstraintName("FK_EquipmentChangeRequest_ReviewedBy");
+        });
+
+        modelBuilder.Entity<EquipmentExtensionRequest>(entity =>
+        {
+            entity.HasKey(e => e.ExtensionRequestId).HasName("PK_EquipmentExtensionRequest");
+
+            entity.ToTable("EquipmentExtensionRequest", t => t.HasCheckConstraint(
+                "CK_EquipmentExtensionRequest_EndDate",
+                "[requested_end_date] > [original_end_date]"));
+
+            entity.Property(e => e.ExtensionRequestId).HasColumnName("extension_request_id");
+            entity.Property(e => e.AllocationEquipmentDetailId).HasColumnName("allocation_equipment_detail_id");
+            entity.Property(e => e.RequestedBy).HasColumnName("requested_by");
+            entity.Property(e => e.OriginalEndDate).HasColumnName("original_end_date");
+            entity.Property(e => e.RequestedEndDate).HasColumnName("requested_end_date");
+            entity.Property(e => e.Reason).HasColumnName("reason");
+            entity.Property(e => e.Status)
+                .HasMaxLength(50)
+                .HasDefaultValue("Pending")
+                .HasColumnName("status");
+            entity.Property(e => e.ReviewedBy).HasColumnName("reviewed_by");
+            entity.Property(e => e.ReviewedAt).HasColumnName("reviewed_at");
+            entity.Property(e => e.RejectionReason).HasColumnName("rejection_reason");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasOne(d => d.AllocationEquipmentDetail).WithMany(p => p.EquipmentExtensionRequests)
+                .HasForeignKey(d => d.AllocationEquipmentDetailId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_EquipmentExtensionRequest_AllocationEquipmentDetail");
+
+            entity.HasOne(d => d.RequestedByNavigation).WithMany(p => p.EquipmentExtensionRequestRequestedByNavigations)
+                .HasForeignKey(d => d.RequestedBy)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_EquipmentExtensionRequest_RequestedBy");
+
+            entity.HasOne(d => d.ReviewedByNavigation).WithMany(p => p.EquipmentExtensionRequestReviewedByNavigations)
+                .HasForeignKey(d => d.ReviewedBy)
+                .HasConstraintName("FK_EquipmentExtensionRequest_ReviewedBy");
+        });
+
+        modelBuilder.Entity<EquipmentHandover>(entity =>
+        {
+            entity.HasKey(e => e.HandoverId).HasName("PK_EquipmentHandover");
+
+            entity.ToTable("EquipmentHandover", t => t.HasCheckConstraint(
+                "CK_EquipmentHandover_Quantity",
+                "[quantity] > 0"));
+
+            entity.Property(e => e.HandoverId).HasColumnName("handover_id");
+            entity.Property(e => e.AllocationEquipmentDetailId).HasColumnName("allocation_equipment_detail_id");
+            entity.Property(e => e.EquipmentInstanceId).HasColumnName("equipment_instance_id");
+            entity.Property(e => e.HandedOverBy).HasColumnName("handed_over_by");
+            entity.Property(e => e.ReceivedBy).HasColumnName("received_by");
+            entity.Property(e => e.HandoverDate).HasColumnName("handover_date");
+            entity.Property(e => e.Quantity).HasColumnName("quantity");
+            entity.Property(e => e.ConditionBefore)
+                .HasMaxLength(100)
+                .HasColumnName("condition_before");
+            entity.Property(e => e.Note).HasColumnName("note");
+            entity.Property(e => e.Status)
+                .HasMaxLength(50)
+                .HasDefaultValue("Pending")
+                .HasColumnName("status");
+            entity.Property(e => e.ConfirmedAt).HasColumnName("confirmed_at");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasOne(d => d.AllocationEquipmentDetail).WithMany(p => p.EquipmentHandovers)
+                .HasForeignKey(d => d.AllocationEquipmentDetailId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_EquipmentHandover_AllocationEquipmentDetail");
+
+            entity.HasOne(d => d.EquipmentInstance).WithMany(p => p.EquipmentHandovers)
+                .HasForeignKey(d => d.EquipmentInstanceId)
+                .HasConstraintName("FK_EquipmentHandover_EquipmentInstance");
+
+            entity.HasOne(d => d.HandedOverByNavigation).WithMany(p => p.EquipmentHandoverHandedOverByNavigations)
+                .HasForeignKey(d => d.HandedOverBy)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_EquipmentHandover_HandedOverBy");
+
+            entity.HasOne(d => d.ReceivedByNavigation).WithMany(p => p.EquipmentHandoverReceivedByNavigations)
+                .HasForeignKey(d => d.ReceivedBy)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_EquipmentHandover_ReceivedBy");
+        });
+
+        modelBuilder.Entity<EquipmentReturn>(entity =>
+        {
+            entity.HasKey(e => e.ReturnId).HasName("PK_EquipmentReturn");
+
+            entity.ToTable("EquipmentReturn", t =>
+            {
+                t.HasCheckConstraint("CK_EquipmentReturn_Quantity", "[quantity] > 0");
+                t.HasCheckConstraint(
+                    "CK_EquipmentReturn_DamageDescription",
+                    "[is_damaged] = 0 OR [damage_description] IS NOT NULL");
+            });
+
+            entity.Property(e => e.ReturnId).HasColumnName("return_id");
+            entity.Property(e => e.AllocationEquipmentDetailId).HasColumnName("allocation_equipment_detail_id");
+            entity.Property(e => e.EquipmentInstanceId).HasColumnName("equipment_instance_id");
+            entity.Property(e => e.ReturnedBy).HasColumnName("returned_by");
+            entity.Property(e => e.ReceivedBy).HasColumnName("received_by");
+            entity.Property(e => e.ReturnDate).HasColumnName("return_date");
+            entity.Property(e => e.Quantity).HasColumnName("quantity");
+            entity.Property(e => e.ConditionAfter)
+                .HasMaxLength(100)
+                .HasColumnName("condition_after");
+            entity.Property(e => e.IsDamaged)
+                .HasDefaultValue(false)
+                .HasColumnName("is_damaged");
+            entity.Property(e => e.DamageDescription).HasColumnName("damage_description");
+            entity.Property(e => e.Note).HasColumnName("note");
+            entity.Property(e => e.Status)
+                .HasMaxLength(50)
+                .HasDefaultValue("Pending")
+                .HasColumnName("status");
+            entity.Property(e => e.ConfirmedAt).HasColumnName("confirmed_at");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasOne(d => d.AllocationEquipmentDetail).WithMany(p => p.EquipmentReturns)
+                .HasForeignKey(d => d.AllocationEquipmentDetailId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_EquipmentReturn_AllocationEquipmentDetail");
+
+            entity.HasOne(d => d.EquipmentInstance).WithMany(p => p.EquipmentReturns)
+                .HasForeignKey(d => d.EquipmentInstanceId)
+                .HasConstraintName("FK_EquipmentReturn_EquipmentInstance");
+
+            entity.HasOne(d => d.ReturnedByNavigation).WithMany(p => p.EquipmentReturnReturnedByNavigations)
+                .HasForeignKey(d => d.ReturnedBy)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_EquipmentReturn_ReturnedBy");
+
+            entity.HasOne(d => d.ReceivedByNavigation).WithMany(p => p.EquipmentReturnReceivedByNavigations)
+                .HasForeignKey(d => d.ReceivedBy)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_EquipmentReturn_ReceivedBy");
         });
 
         modelBuilder.Entity<EquipmentShortageLog>(entity =>
