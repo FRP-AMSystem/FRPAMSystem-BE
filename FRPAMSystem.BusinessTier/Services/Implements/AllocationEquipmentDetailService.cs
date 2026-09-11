@@ -205,6 +205,13 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             return await GetAllocationEquipmentDetailByIdAsync(id);
         }
 
+        public Task<bool> UserCanAccessAllocationEquipmentDetailAsync(
+            int allocationEquipmentDetailId,
+            int userId)
+        {
+            return UserCanAccessDetailAsync(allocationEquipmentDetailId, userId);
+        }
+
         public async Task<AllocationEquipmentDetailResponse?> HandoverMineAsync(int id, int userId)
         {
             if (!await UserCanAccessDetailAsync(id, userId))

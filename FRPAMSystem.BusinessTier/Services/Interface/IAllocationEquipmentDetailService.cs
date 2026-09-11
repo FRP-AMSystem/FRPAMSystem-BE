@@ -26,6 +26,10 @@ namespace FRPAMSystem.BusinessTier.Services.Interface
             int id,
             int userId);
 
+        Task<bool> UserCanAccessAllocationEquipmentDetailAsync(
+            int allocationEquipmentDetailId,
+            int userId);
+
         Task<AllocationEquipmentDetailResponse?> HandoverMineAsync(int id, int userId);
 
         Task<AllocationEquipmentDetailResponse?> ReturnMineAsync(int id, int userId);
