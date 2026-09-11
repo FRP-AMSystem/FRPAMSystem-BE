@@ -42,4 +42,12 @@ public partial class AllocationEquipmentDetail
     public virtual ExperimentEquipmentRequirement? ExpEquipmentReq { get; set; }
 
     public virtual PhaseEquipmentRequirement? PhaseEquipmentReq { get; set; }
+
+    public virtual ICollection<EquipmentChangeRequest> EquipmentChangeRequests { get; set; } = new List<EquipmentChangeRequest>();
+
+    public virtual ICollection<EquipmentExtensionRequest> EquipmentExtensionRequests { get; set; } = new List<EquipmentExtensionRequest>();
+
+    public virtual ICollection<EquipmentHandover> EquipmentHandovers { get; set; } = new List<EquipmentHandover>();
+
+    public virtual ICollection<EquipmentReturn> EquipmentReturns { get; set; } = new List<EquipmentReturn>();
 }
