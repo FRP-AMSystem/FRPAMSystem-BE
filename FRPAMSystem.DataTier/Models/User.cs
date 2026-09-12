@@ -36,4 +36,20 @@ public partial class User
     public virtual Role Role { get; set; } = null!;
 
     public virtual ICollection<Schedule> Schedules { get; set; } = new List<Schedule>();
+
+    public virtual ICollection<EquipmentChangeRequest> EquipmentChangeRequestRequestedByNavigations { get; set; } = new List<EquipmentChangeRequest>();
+
+    public virtual ICollection<EquipmentChangeRequest> EquipmentChangeRequestReviewedByNavigations { get; set; } = new List<EquipmentChangeRequest>();
+
+    public virtual ICollection<EquipmentExtensionRequest> EquipmentExtensionRequestRequestedByNavigations { get; set; } = new List<EquipmentExtensionRequest>();
+
+    public virtual ICollection<EquipmentExtensionRequest> EquipmentExtensionRequestReviewedByNavigations { get; set; } = new List<EquipmentExtensionRequest>();
+
+    public virtual ICollection<EquipmentHandover> EquipmentHandoverHandedOverByNavigations { get; set; } = new List<EquipmentHandover>();
+
+    public virtual ICollection<EquipmentHandover> EquipmentHandoverReceivedByNavigations { get; set; } = new List<EquipmentHandover>();
+
+    public virtual ICollection<EquipmentReturn> EquipmentReturnReturnedByNavigations { get; set; } = new List<EquipmentReturn>();
+
+    public virtual ICollection<EquipmentReturn> EquipmentReturnReceivedByNavigations { get; set; } = new List<EquipmentReturn>();
 }
