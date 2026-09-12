@@ -57,7 +57,14 @@ namespace FRPAMSystem.BusinessTier.AI.Models
                     ScheduleScore = FitnessBreakdown.ScheduleScore,
                     PenaltyScore = FitnessBreakdown.PenaltyScore,
                     BonusScore = FitnessBreakdown.BonusScore,
-                    FinalScore = FitnessBreakdown.FinalScore
+                    FinalScore = FitnessBreakdown.FinalScore,
+                    OverallCalculation = FitnessBreakdown.OverallCalculation,
+                    Land = FitnessBreakdown.Land.Clone(),
+                    Human = FitnessBreakdown.Human.Clone(),
+                    Equipment = FitnessBreakdown.Equipment.Clone(),
+                    Schedule = FitnessBreakdown.Schedule.Clone(),
+                    Penalties = FitnessBreakdown.Penalties.Select(p => p.Clone()).ToList(),
+                    Bonuses = FitnessBreakdown.Bonuses.Select(b => b.Clone()).ToList()
                 },
                 ConstraintReport = new ConstraintReport
                 {
