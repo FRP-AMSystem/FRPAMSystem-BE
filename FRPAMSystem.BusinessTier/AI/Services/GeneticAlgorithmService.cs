@@ -146,7 +146,14 @@ namespace FRPAMSystem.BusinessTier.AI.Services
                     ScheduleScore = Math.Round(chromosome.FitnessBreakdown.ScheduleScore, 2),
                     PenaltyScore = Math.Round(chromosome.FitnessBreakdown.PenaltyScore, 2),
                     BonusScore = Math.Round(chromosome.FitnessBreakdown.BonusScore, 2),
-                    FinalScore = Math.Round(chromosome.FitnessBreakdown.FinalScore, 2)
+                    FinalScore = Math.Round(chromosome.FitnessBreakdown.FinalScore, 2),
+                    OverallCalculation = chromosome.FitnessBreakdown.OverallCalculation,
+                    Land = MapExplanationDTO(chromosome.FitnessBreakdown.Land),
+                    Human = MapExplanationDTO(chromosome.FitnessBreakdown.Human),
+                    Equipment = MapExplanationDTO(chromosome.FitnessBreakdown.Equipment),
+                    Schedule = MapExplanationDTO(chromosome.FitnessBreakdown.Schedule),
+                    Penalties = chromosome.FitnessBreakdown.Penalties.Select(MapAdjustmentDTO).ToList(),
+                    Bonuses = chromosome.FitnessBreakdown.Bonuses.Select(MapAdjustmentDTO).ToList()
                 },
                 ConstraintReport = new ConstraintReportDTO
                 {
@@ -248,6 +255,36 @@ namespace FRPAMSystem.BusinessTier.AI.Services
             }
 
             return suggestion;
+        }
+
+        private static ScoreExplanationDTO MapExplanationDTO(ScoreExplanation? explanation)
+        {
+            if (explanation == null)
+            {
+                return new ScoreExplanationDTO();
+            }
+
+            return new ScoreExplanationDTO
+            {
+                BaseScore = explanation.BaseScore,
+                FinalScore = explanation.FinalScore,
+                Calculation = explanation.Calculation,
+                Adjustments = explanation.Adjustments.Select(MapAdjustmentDTO).ToList(),
+                Penalties = explanation.Penalties.Select(MapAdjustmentDTO).ToList(),
+                Bonuses = explanation.Bonuses.Select(MapAdjustmentDTO).ToList()
+            };
+        }
+
+        private static ScoreAdjustmentDTO MapAdjustmentDTO(ScoreAdjustment adjustment)
+        {
+            return new ScoreAdjustmentDTO
+            {
+                Factor = adjustment.Factor,
+                Points = adjustment.Points,
+                Type = adjustment.Type,
+                Reason = adjustment.Reason,
+                Calculation = adjustment.Calculation
+            };
         }
 
         private static string CreateFingerprint(AllocationChromosome chromosome)

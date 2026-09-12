@@ -52,6 +52,48 @@ namespace FRPAMSystem.BusinessTier.AI.DTO
         public double BonusScore { get; set; }
 
         public double FinalScore { get; set; }
+
+        public string OverallCalculation { get; set; } = string.Empty;
+
+        public ScoreExplanationDTO Land { get; set; } = new();
+
+        public ScoreExplanationDTO Human { get; set; } = new();
+
+        public ScoreExplanationDTO Equipment { get; set; } = new();
+
+        public ScoreExplanationDTO Schedule { get; set; } = new();
+
+        public List<ScoreAdjustmentDTO> Penalties { get; set; } = new();
+
+        public List<ScoreAdjustmentDTO> Bonuses { get; set; } = new();
+    }
+
+    public class ScoreAdjustmentDTO
+    {
+        public string Factor { get; set; } = string.Empty;
+
+        public double Points { get; set; }
+
+        public string Type { get; set; } = string.Empty;
+
+        public string Reason { get; set; } = string.Empty;
+
+        public string Calculation { get; set; } = string.Empty;
+    }
+
+    public class ScoreExplanationDTO
+    {
+        public double BaseScore { get; set; }
+
+        public double FinalScore { get; set; }
+
+        public string Calculation { get; set; } = string.Empty;
+
+        public List<ScoreAdjustmentDTO> Adjustments { get; set; } = new();
+
+        public List<ScoreAdjustmentDTO> Penalties { get; set; } = new();
+
+        public List<ScoreAdjustmentDTO> Bonuses { get; set; } = new();
     }
 
     public class ConstraintReportDTO
