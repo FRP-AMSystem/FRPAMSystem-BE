@@ -19,13 +19,28 @@ namespace FRPAMSystem.BusinessTier.AI.Operators.Selection
             for (var i = 1; i < tournamentSize; i++)
             {
                 var candidate = population[_random.Next(population.Count)];
-                if (candidate.FitnessScore > best.FitnessScore)
+                if (IsBetter(candidate, best))
                 {
                     best = candidate;
                 }
             }
 
             return best.Clone();
+        }
+
+        private static bool IsBetter(AllocationChromosome candidate, AllocationChromosome best)
+        {
+            if (candidate.HardViolationCount != best.HardViolationCount)
+            {
+                return candidate.HardViolationCount < best.HardViolationCount;
+            }
+
+            if (Math.Abs(candidate.FitnessScore - best.FitnessScore) > 0.001d)
+            {
+                return candidate.FitnessScore > best.FitnessScore;
+            }
+
+            return candidate.SoftViolationCount < best.SoftViolationCount;
         }
     }
 }

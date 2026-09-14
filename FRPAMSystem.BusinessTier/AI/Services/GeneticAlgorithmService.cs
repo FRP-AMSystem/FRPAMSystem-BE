@@ -45,7 +45,9 @@ namespace FRPAMSystem.BusinessTier.AI.Services
             for (var generation = 0; generation < input.Settings.GenerationCount; generation++)
             {
                 var ordered = population.Chromosomes
-                    .OrderByDescending(c => c.FitnessScore)
+                    .OrderBy(c => c.HardViolationCount)
+                    .ThenByDescending(c => c.FitnessScore)
+                    .ThenBy(c => c.SoftViolationCount)
                     .ToList();
 
                 var nextGeneration = ordered
@@ -99,7 +101,9 @@ namespace FRPAMSystem.BusinessTier.AI.Services
             }
 
             return population.Chromosomes
-                .OrderByDescending(c => c.FitnessScore)
+                .OrderBy(c => c.HardViolationCount)
+                .ThenByDescending(c => c.FitnessScore)
+                .ThenBy(c => c.SoftViolationCount)
                 .Take(input.Settings.TopSuggestionCount)
                 .Select((chromosome, index) => MapSuggestion(chromosome, input, index + 1))
                 .ToList();
@@ -130,6 +134,9 @@ namespace FRPAMSystem.BusinessTier.AI.Services
                 PenaltyScore = Math.Round(chromosome.PenaltyScore, 2),
                 BonusScore = Math.Round(chromosome.BonusScore, 2),
                 ConflictCount = chromosome.ConflictCount,
+                HardViolationCount = chromosome.HardViolationCount,
+                SoftViolationCount = chromosome.SoftViolationCount,
+                IsFeasible = chromosome.IsFeasible,
                 EstimatedCompletionTime = chromosome.Genes.Select(g => g.EndDate).DefaultIfEmpty(input.Experiment.ExpectEndDate).Max(),
                 FitnessBreakdown = new FitnessBreakdownDTO
                 {
@@ -139,10 +146,19 @@ namespace FRPAMSystem.BusinessTier.AI.Services
                     ScheduleScore = Math.Round(chromosome.FitnessBreakdown.ScheduleScore, 2),
                     PenaltyScore = Math.Round(chromosome.FitnessBreakdown.PenaltyScore, 2),
                     BonusScore = Math.Round(chromosome.FitnessBreakdown.BonusScore, 2),
-                    FinalScore = Math.Round(chromosome.FitnessBreakdown.FinalScore, 2)
+                    FinalScore = Math.Round(chromosome.FitnessBreakdown.FinalScore, 2),
+                    OverallCalculation = chromosome.FitnessBreakdown.OverallCalculation,
+                    Land = MapExplanationDTO(chromosome.FitnessBreakdown.Land),
+                    Human = MapExplanationDTO(chromosome.FitnessBreakdown.Human),
+                    Equipment = MapExplanationDTO(chromosome.FitnessBreakdown.Equipment),
+                    Schedule = MapExplanationDTO(chromosome.FitnessBreakdown.Schedule),
+                    Penalties = chromosome.FitnessBreakdown.Penalties.Select(MapAdjustmentDTO).ToList(),
+                    Bonuses = chromosome.FitnessBreakdown.Bonuses.Select(MapAdjustmentDTO).ToList()
                 },
                 ConstraintReport = new ConstraintReportDTO
                 {
+                    HardViolationCount = chromosome.HardViolationCount,
+                    SoftViolationCount = chromosome.SoftViolationCount,
                     LandConflicts = chromosome.ConstraintReport.LandConflicts.Distinct().ToList(),
                     HumanConflicts = chromosome.ConstraintReport.HumanConflicts.Distinct().ToList(),
                     EquipmentConflicts = chromosome.ConstraintReport.EquipmentConflicts.Distinct().ToList(),
@@ -239,6 +255,36 @@ namespace FRPAMSystem.BusinessTier.AI.Services
             }
 
             return suggestion;
+        }
+
+        private static ScoreExplanationDTO MapExplanationDTO(ScoreExplanation? explanation)
+        {
+            if (explanation == null)
+            {
+                return new ScoreExplanationDTO();
+            }
+
+            return new ScoreExplanationDTO
+            {
+                BaseScore = explanation.BaseScore,
+                FinalScore = explanation.FinalScore,
+                Calculation = explanation.Calculation,
+                Adjustments = explanation.Adjustments.Select(MapAdjustmentDTO).ToList(),
+                Penalties = explanation.Penalties.Select(MapAdjustmentDTO).ToList(),
+                Bonuses = explanation.Bonuses.Select(MapAdjustmentDTO).ToList()
+            };
+        }
+
+        private static ScoreAdjustmentDTO MapAdjustmentDTO(ScoreAdjustment adjustment)
+        {
+            return new ScoreAdjustmentDTO
+            {
+                Factor = adjustment.Factor,
+                Points = adjustment.Points,
+                Type = adjustment.Type,
+                Reason = adjustment.Reason,
+                Calculation = adjustment.Calculation
+            };
         }
 
         private static string CreateFingerprint(AllocationChromosome chromosome)

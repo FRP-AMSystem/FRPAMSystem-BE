@@ -1,3 +1,5 @@
+using FRPAMSystem.BusinessTier.AI.Models;
+
 namespace FRPAMSystem.BusinessTier.AI.Fitness.Evaluators
 {
     public class ConstraintEvaluationResult
@@ -13,5 +15,12 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness.Evaluators
         public List<string> Advantages { get; set; } = new();
 
         public List<string> Disadvantages { get; set; } = new();
+
+        public ScoreExplanation Explanation { get; set; } = new();
+
+        public List<ScoreAdjustment> BonusAdjustments { get; set; } = new();
+
+        public List<ScoreAdjustment> PenaltyAdjustments { get; set; } = new();
     }
 }
+
