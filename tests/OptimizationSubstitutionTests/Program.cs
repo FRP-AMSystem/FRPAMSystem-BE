@@ -26,7 +26,20 @@ var tests = new (string Name, Action Test)[]
     ("Substitution generator: Primary unavailable and no substitute keeps existing shortage behavior", TestNoSubstituteLeavesShortage),
     ("Substitution generator: Substitution duration can create deadline violation", TestSubstitutionDeadlineViolation),
     ("Substitution generator: Substitution duration can create resource overlap", TestSubstitutionResourceOverlap),
-    ("Substitution generator: Primary is preferred over lower-efficiency longer substitute", TestPrimaryPreferred)
+    ("Substitution generator: Primary is preferred over lower-efficiency longer substitute", TestPrimaryPreferred),
+    ("Boundary overlap: Handover date (End == Start) is not an overlap", TestHandoverBoundaryNonOverlap),
+    ("Boundary overlap: Actual date collision is detected", TestRealResourceCollisionDetected),
+    ("Human matching: Role mismatch creates hard violation and infeasibility", TestHumanRoleMismatchGeneratesConflict),
+    ("Human generator: Prefers staff with matching role", TestHumanGeneratorMatchesRole),
+    ("Equipment substitution: Disallowed substitution is not assigned", TestDisallowedSubstituteGeneratesShortage),
+    ("Equipment substitution: Valid substitution is not reported as constraint violation", TestValidSubstituteNotReportedAsViolation),
+    ("Ranking: Feasible lower-score beats infeasible higher-score", TestFeasibleLowerScoreBeatsInfeasibleHigherScore),
+    ("Original bug verification: Infeasible candidate with 14 conflicts receives penalty and cannot be Rank 1 over feasible candidate", TestOriginalBugReproductionAndFix),
+    ("Multi-requirement isolation: Foreign assignments do not cause type mismatches", TestMultiRequirementPhaseEquipmentIsolation),
+    ("Penalty propagation: Default settings deduct penalty for constraint violations", TestDefaultSettingsPenaltyPropagation),
+    ("Zero penalty: Explicit PenaltyWeight=0 produces PenaltyScore=0 but retains infeasibility", TestExplicitZeroPenaltyWeight),
+    ("Valid substitution: Conforming substitute generates 0 constraint violations", TestValidSubstitution),
+    ("Invalid substitution: Disallowed substitution produces hard type mismatch", TestInvalidSubstitutionDisallowed)
 };
 
 var passed = 0;
@@ -839,6 +852,442 @@ static EquipmentAssignmentGene AssertSingleAssignment(AllocationGene gene)
 {
     Assert(gene.EquipmentAssignments.Count == 1, $"Expected exactly one equipment assignment, got {gene.EquipmentAssignments.Count}.");
     return gene.EquipmentAssignments[0];
+}
+
+static void TestHandoverBoundaryNonOverlap()
+{
+    var p1Start = new DateTime(2026, 6, 1);
+    var p1End = new DateTime(2026, 6, 6);
+    var p2Start = new DateTime(2026, 6, 6);
+    var p2End = new DateTime(2026, 6, 15);
+
+    var overlaps = FitnessEvaluationHelper.Overlaps(p1Start, p1End, p2Start, p2End);
+    Assert(!overlaps, "Consecutive phase handover (P1 end == P2 start) must not be flagged as overlapping.");
+
+    var chromosome = new AllocationChromosome
+    {
+        Genes =
+        [
+            new AllocationGene { PhaseId = 1, LandId = 1, StartDate = p1Start, EndDate = p1End },
+            new AllocationGene { PhaseId = 2, LandId = 1, StartDate = p2Start, EndDate = p2End }
+        ]
+    };
+
+    var input = CreateComprehensiveOptimizationInput();
+    var evaluator = new LandConstraintEvaluator();
+    var result = evaluator.Evaluate(chromosome, input);
+
+    Assert(!result.Violations.Any(v => v.Message.Contains("double-booked", StringComparison.OrdinalIgnoreCase)),
+        "Same land used across sequential handover phases should not produce a double-booking violation.");
+}
+
+static void TestRealResourceCollisionDetected()
+{
+    var p1Start = new DateTime(2026, 6, 1);
+    var p1End = new DateTime(2026, 6, 8);
+    var p2Start = new DateTime(2026, 6, 6);
+    var p2End = new DateTime(2026, 6, 15);
+
+    var overlaps = FitnessEvaluationHelper.Overlaps(p1Start, p1End, p2Start, p2End);
+    Assert(overlaps, "Overlapping date intervals must be detected as true collision.");
+
+    var chromosome = new AllocationChromosome
+    {
+        Genes =
+        [
+            new AllocationGene { PhaseId = 1, LandId = 1, StartDate = p1Start, EndDate = p1End },
+            new AllocationGene { PhaseId = 2, LandId = 1, StartDate = p2Start, EndDate = p2End }
+        ]
+    };
+
+    var input = CreateComprehensiveOptimizationInput();
+    var evaluator = new LandConstraintEvaluator();
+    var result = evaluator.Evaluate(chromosome, input);
+
+    Assert(result.Violations.Any(v => v.Message.Contains("double-booked", StringComparison.OrdinalIgnoreCase)),
+        "True overlapping land assignment must produce a double-booking violation.");
+}
+
+static void TestHumanRoleMismatchGeneratesConflict()
+{
+    var input = CreateComprehensiveOptimizationInput();
+    input.PhaseHumanRequirements.First().RoleId = 5;
+
+    var plan = CreateValidManualPlan();
+    var mapper = new AllocationPlanChromosomeMapper();
+    var chromosome = mapper.MapToChromosome(plan, input);
+
+    var calculator = CreateFitnessCalculator();
+    var result = calculator.Evaluate(chromosome, input);
+
+    Assert(result.HardViolationCount > 0, "Missing required role must produce a hard violation.");
+    Assert(!result.IsFeasible, "Candidate with missing required role must be marked infeasible.");
+    Assert(result.ConstraintReport.RoleConflicts.Any(c => c.Contains("missing required role", StringComparison.OrdinalIgnoreCase)),
+        "RoleConflicts report must contain missing role message.");
+}
+
+static void TestHumanGeneratorMatchesRole()
+{
+    var input = CreateComprehensiveOptimizationInput();
+    input.HumanResources.First(h => h.HumanResourceId == 2).User!.RoleId = 2;
+    input.PhaseHumanRequirements.First(r => r.PhaseId == 1).RoleId = 2;
+
+    var popGen = new PopulationGenerator();
+    var gene = popGen.GenerateGene(1, input);
+
+    Assert(gene.AssignedHumanResourceIds.Contains(2), "Generator should select Human 2 who matches RoleId 2.");
+}
+
+static void TestDisallowedSubstituteGeneratesShortage()
+{
+    var input = CreateInput(primaryAvailable: false, includeSubstitution: true);
+    input.ExperimentEquipmentRequirements = new[]
+    {
+        new ExperimentEquipmentRequirement
+        {
+            EquipmentTypeId = 1,
+            AllowSubstitute = false,
+            Quantity = 1
+        }
+    };
+
+    var popGen = new PopulationGenerator();
+    var gene = popGen.GenerateGene(10, input);
+
+    Assert(gene.EquipmentAssignments.Count == 0, "When substitution is not allowed, generator must not assign substitute.");
+}
+
+static void TestValidSubstituteNotReportedAsViolation()
+{
+    var input = CreateInput(primaryAvailable: false, includeSubstitution: true);
+    var popGen = new PopulationGenerator();
+    var gene = popGen.GenerateGene(10, input);
+    var chromosome = new AllocationChromosome { Genes = [gene] };
+
+    var evaluator = new EquipmentConstraintEvaluator();
+    var result = evaluator.Evaluate(chromosome, input);
+
+    Assert(result.Violations.Count == 0, $"Expected 0 violations for valid substitution, got: {string.Join(", ", result.Violations.Select(v => v.Message))}");
+    Assert(result.Disadvantages.Any(d => d.Contains("substitute", StringComparison.OrdinalIgnoreCase)),
+        "Valid substitution should be listed as an informational disadvantage note.");
+}
+
+static void TestFeasibleLowerScoreBeatsInfeasibleHigherScore()
+{
+    var feasible = new AllocationChromosome
+    {
+        FitnessScore = 75.0,
+        HardViolationCount = 0,
+        SoftViolationCount = 0
+    };
+
+    var infeasible = new AllocationChromosome
+    {
+        FitnessScore = 88.0,
+        HardViolationCount = 2,
+        SoftViolationCount = 1
+    };
+
+    var selection = new TournamentSelectionOperator();
+    var population = new List<AllocationChromosome> { infeasible, feasible };
+    var settings = new OptimizationSettings { TournamentSize = 2 };
+
+    var selected = selection.Select(population, settings);
+    Assert(selected.HardViolationCount == 0, "Tournament selection must prefer feasible candidate with 0 hard violations.");
+    Assert(Math.Abs(selected.FitnessScore - 75.0) < 0.01, "Selected candidate should have score 75.0.");
+}
+
+static void TestOriginalBugReproductionAndFix()
+{
+    var input = CreateComprehensiveOptimizationInput();
+    input.PhaseHumanRequirements.First().RoleId = 99;
+    input.PhaseHumanRequirements.First().RequiredSkillId = 99;
+    input.ExistingLandAllocations = new[]
+    {
+        new AllocationLandDetail
+        {
+            AllocationLandDetailId = 500,
+            AllocationPlanId = 500,
+            LandId = 1,
+            StartDate = new DateTime(2026, 1, 2),
+            EndDate = new DateTime(2026, 1, 4),
+            Status = "Allocated"
+        }
+    };
+
+    var plan = CreateValidManualPlan();
+    var mapper = new AllocationPlanChromosomeMapper();
+    var chromosome = mapper.MapToChromosome(plan, input);
+
+    var calculator = CreateFitnessCalculator();
+    var result = calculator.Evaluate(chromosome, input);
+
+    Assert(result.ConflictCount > 0, "Conflicts must be detected.");
+    Assert(result.HardViolationCount > 0, "Hard violations must be counted.");
+    Assert(!result.IsFeasible, "Candidate must be marked infeasible.");
+    Assert(result.PenaltyScore < 0, $"PenaltyScore must be strictly negative when violations exist, got {result.PenaltyScore}.");
+    Assert(result.FitnessScore < 70, $"FitnessScore should be substantially reduced by penalties, got {result.FitnessScore}.");
+}
+
+static void TestMultiRequirementPhaseEquipmentIsolation()
+{
+    var type6 = new EquipmentType { EquipmentTypeId = 6, Name = "PrimaryType6", TrackingType = "Individual", BaseMaintenanceIntervalHours = 100 };
+    var type8 = new EquipmentType { EquipmentTypeId = 8, Name = "PrimaryType8", TrackingType = "Individual", BaseMaintenanceIntervalHours = 100 };
+    var type9 = new EquipmentType { EquipmentTypeId = 9, Name = "SubstituteType9", TrackingType = "Individual", BaseMaintenanceIntervalHours = 100 };
+
+    var input = new OptimizationInput
+    {
+        Experiment = new Experiment
+        {
+            ExperimentId = 1,
+            ExperimentName = "Multi-Req Test",
+            ExpectStartDate = new DateTime(2026, 1, 1),
+            ExpectEndDate = new DateTime(2026, 1, 10)
+        },
+        ExperimentPhases =
+        [
+            new ExperimentPhase
+            {
+                PhaseId = 1,
+                PhaseOrder = 1,
+                ExpectedStartDate = new DateTime(2026, 1, 1),
+                ExpectedEndDate = new DateTime(2026, 1, 10)
+            }
+        ],
+        PhaseEquipmentRequirements =
+        [
+            new PhaseEquipmentRequirement
+            {
+                PhaseEquipmentReqId = 10,
+                PhaseId = 1,
+                EquipmentTypeId = 6,
+                Quantity = 2,
+                EquipmentType = type6
+            },
+            new PhaseEquipmentRequirement
+            {
+                PhaseEquipmentReqId = 11,
+                PhaseId = 1,
+                EquipmentTypeId = 8,
+                Quantity = 1,
+                EquipmentType = type8
+            }
+        ],
+        ExperimentEquipmentRequirements =
+        [
+            new ExperimentEquipmentRequirement
+            {
+                EquipmentTypeId = 6,
+                AllowSubstitute = true,
+                MinAcceptableEfficiency = 0.7d,
+                Quantity = 2
+            },
+            new ExperimentEquipmentRequirement
+            {
+                EquipmentTypeId = 8,
+                AllowSubstitute = false,
+                Quantity = 1
+            }
+        ],
+        EquipmentInstances =
+        [
+            new EquipmentInstance
+            {
+                EquipmentInstanceId = 101,
+                EquipmentTypeId = 9,
+                EquipmentType = type9,
+                AssetCode = "PHM-2026-002",
+                Status = "Available",
+                ConditionLevel = "Good"
+            },
+            new EquipmentInstance
+            {
+                EquipmentInstanceId = 102,
+                EquipmentTypeId = 9,
+                EquipmentType = type9,
+                AssetCode = "PHM-2026-003",
+                Status = "Available",
+                ConditionLevel = "Good"
+            }
+        ],
+        EquipmentSubstitutions =
+        [
+            new EquipmentSubstitution
+            {
+                EquipmentSubId = 1,
+                PrimaryEquipmentTypeId = 6,
+                SubEquipmentTypeId = 9,
+                EfficiencyRate = 0.8d,
+                TimeMultiplier = 1.2d
+            }
+        ]
+    };
+
+    var gene = new AllocationGene
+    {
+        PhaseId = 1,
+        StartDate = new DateTime(2026, 1, 1),
+        EndDate = new DateTime(2026, 1, 10),
+        EquipmentAssignments =
+        [
+            new EquipmentAssignmentGene
+            {
+                PhaseEquipmentRequirementId = 10,
+                RequiredEquipmentTypeId = 6,
+                AllocatedEquipmentTypeId = 9,
+                EquipmentInstanceId = 101,
+                IsSubstitute = true,
+                EfficiencyRate = 0.8d,
+                TimeMultiplier = 1.2d
+            },
+            new EquipmentAssignmentGene
+            {
+                PhaseEquipmentRequirementId = 10,
+                RequiredEquipmentTypeId = 6,
+                AllocatedEquipmentTypeId = 9,
+                EquipmentInstanceId = 102,
+                IsSubstitute = true,
+                EfficiencyRate = 0.8d,
+                TimeMultiplier = 1.2d
+            }
+        ]
+    };
+
+    var chromosome = new AllocationChromosome { Genes = [gene] };
+    var evaluator = new EquipmentConstraintEvaluator();
+    var result = evaluator.Evaluate(chromosome, input);
+
+    // Assert: Requirement A (Type 6) has 0 violations (no type mismatch, no shortage)
+    Assert(!result.Violations.Any(v => v.Message.Contains("PHM-2026-002 does not match required type", StringComparison.OrdinalIgnoreCase)),
+        "Valid substitute PHM-2026-002 must not trigger a false type mismatch violation.");
+    Assert(!result.Violations.Any(v => v.Message.Contains("PHM-2026-003 does not match required type", StringComparison.OrdinalIgnoreCase)),
+        "Valid substitute PHM-2026-003 must not trigger a false type mismatch violation.");
+
+    // Assert: Only Requirement B (Type 8) produces a shortage violation
+    var shortageViolations = result.Violations.Where(v => v.Message.Contains("insufficient equipment quantity", StringComparison.OrdinalIgnoreCase)).ToList();
+    Assert(shortageViolations.Count == 1, $"Expected exactly 1 shortage violation (for Req B Type 8), but got {shortageViolations.Count}.");
+
+    // Total hard violations for equipment should be 0 (the shortage is soft)
+    var hardViolations = result.Violations.Where(v => v.Severity == ConstraintSeverity.Hard).ToList();
+    Assert(hardViolations.Count == 0, $"Expected 0 hard violations on equipment, but got {hardViolations.Count}: {string.Join(", ", hardViolations.Select(v => v.Message))}");
+}
+
+static void TestDefaultSettingsPenaltyPropagation()
+{
+    var input = CreateComprehensiveOptimizationInput();
+    input.Settings = new OptimizationSettings
+    {
+        PenaltyWeight = 1.0d,
+        HardConstraintPenalty = 25.0d,
+        SoftConstraintPenalty = 5.0d
+    };
+
+    var mapper = new AllocationPlanChromosomeMapper();
+    var chromosome = mapper.MapToChromosome(CreateValidManualPlan(), input);
+
+    // Inject 2 hard violations
+    input.HumanResources.First(h => h.HumanResourceId == 1).Status = "Inactive";
+    input.ExistingLandAllocations =
+    [
+        new AllocationLandDetail
+        {
+            AllocationLandDetailId = 999,
+            AllocationPlanId = 999,
+            LandId = 1,
+            StartDate = new DateTime(2026, 1, 1),
+            EndDate = new DateTime(2026, 1, 5),
+            Status = "Allocated"
+        }
+    ];
+
+    var calculator = CreateFitnessCalculator();
+    var result = calculator.Evaluate(chromosome, input);
+
+    Assert(result.HardViolationCount >= 2, $"Expected at least 2 hard violations, got {result.HardViolationCount}.");
+    Assert(result.PenaltyScore <= -50.0d, $"Expected PenaltyScore <= -50 for 2 hard violations under PenaltyWeight 1.0, got {result.PenaltyScore}.");
+    Assert(!result.IsFeasible, "Candidate with hard violations must have IsFeasible = false.");
+}
+
+static void TestExplicitZeroPenaltyWeight()
+{
+    var input = CreateComprehensiveOptimizationInput();
+    input.Settings = new OptimizationSettings
+    {
+        PenaltyWeight = 0.0d
+    };
+
+    var mapper = new AllocationPlanChromosomeMapper();
+    var chromosome = mapper.MapToChromosome(CreateValidManualPlan(), input);
+
+    // Inject hard violation: Unavailable human
+    input.HumanResources.First(h => h.HumanResourceId == 1).Status = "Inactive";
+
+    var calculator = CreateFitnessCalculator();
+    var result = calculator.Evaluate(chromosome, input);
+
+    Assert(result.HardViolationCount > 0, "Hard violations must still be counted.");
+    Assert(!result.IsFeasible, "Candidate must remain infeasible.");
+    Assert(result.PenaltyScore == 0.0d, $"PenaltyScore must be 0.0 when PenaltyWeight is explicitly 0.0, got {result.PenaltyScore}.");
+}
+
+static void TestValidSubstitution()
+{
+    var type6 = new EquipmentType { EquipmentTypeId = 6, Name = "PrimaryType6", TrackingType = "Individual", BaseMaintenanceIntervalHours = 100 };
+    var type9 = new EquipmentType { EquipmentTypeId = 9, Name = "SubstituteType9", TrackingType = "Individual", BaseMaintenanceIntervalHours = 100 };
+
+    var input = new OptimizationInput
+    {
+        Experiment = new Experiment { ExperimentId = 1, ExpectStartDate = new DateTime(2026, 1, 1), ExpectEndDate = new DateTime(2026, 1, 5) },
+        ExperimentPhases = [new ExperimentPhase { PhaseId = 1, ExpectedStartDate = new DateTime(2026, 1, 1), ExpectedEndDate = new DateTime(2026, 1, 5) }],
+        PhaseEquipmentRequirements = [new PhaseEquipmentRequirement { PhaseEquipmentReqId = 10, PhaseId = 1, EquipmentTypeId = 6, Quantity = 1, EquipmentType = type6 }],
+        ExperimentEquipmentRequirements = [new ExperimentEquipmentRequirement { EquipmentTypeId = 6, AllowSubstitute = true, MinAcceptableEfficiency = 0.7d, Quantity = 1 }],
+        EquipmentInstances = [new EquipmentInstance { EquipmentInstanceId = 1, EquipmentTypeId = 9, EquipmentType = type9, AssetCode = "SUB-01", Status = "Available", ConditionLevel = "Good" }],
+        EquipmentSubstitutions = [new EquipmentSubstitution { EquipmentSubId = 1, PrimaryEquipmentTypeId = 6, SubEquipmentTypeId = 9, EfficiencyRate = 0.8d, TimeMultiplier = 1.2d }]
+    };
+
+    var gene = new AllocationGene
+    {
+        PhaseId = 1,
+        StartDate = new DateTime(2026, 1, 1),
+        EndDate = new DateTime(2026, 1, 5),
+        EquipmentAssignments = [new EquipmentAssignmentGene { PhaseEquipmentRequirementId = 10, RequiredEquipmentTypeId = 6, AllocatedEquipmentTypeId = 9, EquipmentInstanceId = 1, IsSubstitute = true, EfficiencyRate = 0.8d, TimeMultiplier = 1.2d }]
+    };
+
+    var evaluator = new EquipmentConstraintEvaluator();
+    var result = evaluator.Evaluate(new AllocationChromosome { Genes = [gene] }, input);
+
+    Assert(result.Violations.Count == 0, $"Valid substitution must produce 0 violations, got: {string.Join(", ", result.Violations.Select(v => v.Message))}");
+    Assert(result.Disadvantages.Any(d => d.Contains("substitute", StringComparison.OrdinalIgnoreCase)), "Valid substitution should be listed as an informational disadvantage note.");
+}
+
+static void TestInvalidSubstitutionDisallowed()
+{
+    var type6 = new EquipmentType { EquipmentTypeId = 6, Name = "PrimaryType6", TrackingType = "Individual", BaseMaintenanceIntervalHours = 100 };
+    var type9 = new EquipmentType { EquipmentTypeId = 9, Name = "SubstituteType9", TrackingType = "Individual", BaseMaintenanceIntervalHours = 100 };
+
+    var input = new OptimizationInput
+    {
+        Experiment = new Experiment { ExperimentId = 1, ExpectStartDate = new DateTime(2026, 1, 1), ExpectEndDate = new DateTime(2026, 1, 5) },
+        ExperimentPhases = [new ExperimentPhase { PhaseId = 1, ExpectedStartDate = new DateTime(2026, 1, 1), ExpectedEndDate = new DateTime(2026, 1, 5) }],
+        PhaseEquipmentRequirements = [new PhaseEquipmentRequirement { PhaseEquipmentReqId = 10, PhaseId = 1, EquipmentTypeId = 6, Quantity = 1, EquipmentType = type6 }],
+        ExperimentEquipmentRequirements = [new ExperimentEquipmentRequirement { EquipmentTypeId = 6, AllowSubstitute = false, Quantity = 1 }],
+        EquipmentInstances = [new EquipmentInstance { EquipmentInstanceId = 1, EquipmentTypeId = 9, EquipmentType = type9, AssetCode = "SUB-01", Status = "Available", ConditionLevel = "Good" }],
+        EquipmentSubstitutions = [new EquipmentSubstitution { EquipmentSubId = 1, PrimaryEquipmentTypeId = 6, SubEquipmentTypeId = 9, EfficiencyRate = 0.8d, TimeMultiplier = 1.2d }]
+    };
+
+    var gene = new AllocationGene
+    {
+        PhaseId = 1,
+        StartDate = new DateTime(2026, 1, 1),
+        EndDate = new DateTime(2026, 1, 5),
+        EquipmentAssignments = [new EquipmentAssignmentGene { PhaseEquipmentRequirementId = 10, RequiredEquipmentTypeId = 6, AllocatedEquipmentTypeId = 9, EquipmentInstanceId = 1, IsSubstitute = true, EfficiencyRate = 0.8d, TimeMultiplier = 1.2d }]
+    };
+
+    var evaluator = new EquipmentConstraintEvaluator();
+    var result = evaluator.Evaluate(new AllocationChromosome { Genes = [gene] }, input);
+
+    Assert(result.Violations.Any(v => v.Severity == ConstraintSeverity.Hard && v.Message.Contains("does not match required type")),
+        "Disallowed substitution must produce a hard type mismatch violation.");
 }
 
 static void Assert(bool condition, string message)

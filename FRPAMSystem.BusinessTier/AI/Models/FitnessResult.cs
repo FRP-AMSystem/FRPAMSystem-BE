@@ -18,6 +18,12 @@ namespace FRPAMSystem.BusinessTier.AI.Models
 
         public int ConflictCount { get; set; }
 
+        public int HardViolationCount { get; set; }
+
+        public int SoftViolationCount { get; set; }
+
+        public bool IsFeasible => HardViolationCount == 0;
+
         public FitnessBreakdown Breakdown { get; set; } = new();
 
         public ConstraintReport ConstraintReport { get; set; } = new();
@@ -42,10 +48,83 @@ namespace FRPAMSystem.BusinessTier.AI.Models
         public double BonusScore { get; set; }
 
         public double FinalScore { get; set; }
+
+        public string OverallCalculation { get; set; } = string.Empty;
+
+        public ScoreExplanation Land { get; set; } = new();
+
+        public ScoreExplanation Human { get; set; } = new();
+
+        public ScoreExplanation Equipment { get; set; } = new();
+
+        public ScoreExplanation Schedule { get; set; } = new();
+
+        public List<ScoreAdjustment> Penalties { get; set; } = new();
+
+        public List<ScoreAdjustment> Bonuses { get; set; } = new();
+    }
+
+    public class ScoreAdjustment
+    {
+        public string Factor { get; set; } = string.Empty;
+
+        public double Points { get; set; }
+
+        public string Type { get; set; } = string.Empty;
+
+        public string Reason { get; set; } = string.Empty;
+
+        public string Calculation { get; set; } = string.Empty;
+
+        public ScoreAdjustment Clone()
+        {
+            return new ScoreAdjustment
+            {
+                Factor = Factor,
+                Points = Points,
+                Type = Type,
+                Reason = Reason,
+                Calculation = Calculation
+            };
+        }
+    }
+
+    public class ScoreExplanation
+    {
+        public double BaseScore { get; set; }
+
+        public double FinalScore { get; set; }
+
+        public string Calculation { get; set; } = string.Empty;
+
+        public List<ScoreAdjustment> Adjustments { get; set; } = new();
+
+        public List<ScoreAdjustment> Penalties { get; set; } = new();
+
+        public List<ScoreAdjustment> Bonuses { get; set; } = new();
+
+        public ScoreExplanation Clone()
+        {
+            return new ScoreExplanation
+            {
+                BaseScore = BaseScore,
+                FinalScore = FinalScore,
+                Calculation = Calculation,
+                Adjustments = Adjustments.Select(a => a.Clone()).ToList(),
+                Penalties = Penalties.Select(p => p.Clone()).ToList(),
+                Bonuses = Bonuses.Select(b => b.Clone()).ToList()
+            };
+        }
     }
 
     public class ConstraintReport
     {
+        public int HardViolationCount { get; set; }
+
+        public int SoftViolationCount { get; set; }
+
+        public bool IsFeasible => HardViolationCount == 0;
+
         public List<string> LandConflicts { get; set; } = new();
 
         public List<string> HumanConflicts { get; set; } = new();
@@ -63,3 +142,4 @@ namespace FRPAMSystem.BusinessTier.AI.Models
         public List<string> DeadlineConflicts { get; set; } = new();
     }
 }
+

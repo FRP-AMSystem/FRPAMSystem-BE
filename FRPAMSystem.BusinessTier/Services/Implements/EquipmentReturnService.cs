@@ -12,9 +12,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
 {
     public class EquipmentReturnService : IEquipmentReturnService
     {
-        private const string DefaultStatus = "Pending";
-        private const string ConfirmedStatus = "Confirmed";
-
         private readonly IUnitOfWork _unitOfWork;
         private readonly IAllocationEquipmentDetailService _allocationEquipmentDetailService;
         private readonly IClock _clock;
@@ -112,34 +109,16 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 throw new Exception("Equipment must be in InUse status before return.");
             }
 
-            var now = _clock.Now;
+            var equipmentReturn = await CreateConfirmedReturnInternalAsync(
+                detail,
+                returnedBy: userId,
+                receivedBy: userId,
+                conditionAfter: request.ConditionAfter,
+                isDamaged: request.IsDamaged,
+                damageDescription: request.DamageDescription,
+                note: request.Note,
+                completeAllocation: true);
 
-            var equipmentReturn = new EquipmentReturn
-            {
-                AllocationEquipmentDetailId = detail.AllocationEquipmentDetailId,
-                EquipmentInstanceId = detail.EquipmentInstanceId,
-                ReturnedBy = userId,
-                ReceivedBy = userId,
-                ReturnDate = now,
-                Quantity = detail.Quantity,
-                ConditionAfter = request.ConditionAfter.Trim(),
-                IsDamaged = request.IsDamaged,
-                DamageDescription = request.DamageDescription,
-                Note = request.Note,
-                Status = ConfirmedStatus,
-                ConfirmedAt = now
-            };
-
-            detail.Status = AllocationDetailStatus.Completed.ToString();
-
-            if (detail.EquipmentInstanceId.HasValue && detail.EquipmentInstance != null)
-            {
-                detail.EquipmentInstance.Status = EquipmentInstanceStatus.Available.ToString();
-                _unitOfWork.GetRepository<EquipmentInstance>().Update(detail.EquipmentInstance);
-            }
-
-            await _unitOfWork.GetRepository<EquipmentReturn>().InsertAsync(equipmentReturn);
-            _unitOfWork.GetRepository<AllocationEquipmentDetail>().Update(detail);
             await _unitOfWork.CommitAsync();
 
             return MapToResponse(equipmentReturn);
@@ -161,7 +140,9 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 IsDamaged = request.IsDamaged,
                 DamageDescription = request.DamageDescription,
                 Note = request.Note,
-                Status = string.IsNullOrWhiteSpace(request.Status) ? DefaultStatus : request.Status.Trim(),
+                Status = string.IsNullOrWhiteSpace(request.Status)
+                    ? EquipmentReturnStatus.Pending.ToString()
+                    : request.Status.Trim(),
                 ConfirmedAt = request.ConfirmedAt
             };
 
@@ -282,6 +263,61 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             {
                 throw new Exception($"{label} does not exist.");
             }
+        }
+
+        internal async Task<EquipmentReturn> CreateConfirmedReturnInternalAsync(
+            AllocationEquipmentDetail detail,
+            int returnedBy,
+            int receivedBy,
+            string conditionAfter,
+            bool isDamaged,
+            string? damageDescription,
+            string? note,
+            bool completeAllocation)
+        {
+            if (string.IsNullOrWhiteSpace(conditionAfter))
+            {
+                throw new Exception("Condition after return is required.");
+            }
+
+            if (isDamaged && string.IsNullOrWhiteSpace(damageDescription))
+            {
+                throw new Exception("Damage description is required when equipment is marked as damaged.");
+            }
+
+            var now = _clock.Now;
+
+            var equipmentReturn = new EquipmentReturn
+            {
+                AllocationEquipmentDetailId = detail.AllocationEquipmentDetailId,
+                EquipmentInstanceId = detail.EquipmentInstanceId,
+                ReturnedBy = returnedBy,
+                ReceivedBy = receivedBy,
+                ReturnDate = now,
+                Quantity = detail.Quantity,
+                ConditionAfter = conditionAfter.Trim(),
+                IsDamaged = isDamaged,
+                DamageDescription = damageDescription,
+                Note = note,
+                Status = EquipmentReturnStatus.Confirmed.ToString(),
+                ConfirmedAt = now
+            };
+
+            if (completeAllocation)
+            {
+                detail.Status = AllocationDetailStatus.Completed.ToString();
+            }
+
+            if (detail.EquipmentInstanceId.HasValue && detail.EquipmentInstance != null)
+            {
+                detail.EquipmentInstance.Status = EquipmentInstanceStatus.Available.ToString();
+                _unitOfWork.GetRepository<EquipmentInstance>().Update(detail.EquipmentInstance);
+            }
+
+            await _unitOfWork.GetRepository<EquipmentReturn>().InsertAsync(equipmentReturn);
+            _unitOfWork.GetRepository<AllocationEquipmentDetail>().Update(detail);
+
+            return equipmentReturn;
         }
 
         private static EquipmentReturnResponse MapToResponse(EquipmentReturn equipmentReturn)

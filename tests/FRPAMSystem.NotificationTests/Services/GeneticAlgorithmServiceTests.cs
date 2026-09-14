@@ -216,5 +216,89 @@ namespace FRPAMSystem.NotificationTests.Services
             Assert.True(result.PenaltyScore < 0);
             Assert.NotEmpty(result.ConstraintReport.LandConflicts);
         }
+
+        // UT148-TC58
+        // Normal
+        [Fact]
+        public void GenerateSuggestions_FeasibleCandidate_ShouldRankHigherThanInfeasibleCandidate()
+        {
+            // Arrange
+            var input = new OptimizationInput
+            {
+                Experiment = new Experiment
+                {
+                    ExperimentId = 1,
+                    ExperimentName = "Test Exp",
+                    ExpectStartDate = new DateTime(2026, 9, 1),
+                    ExpectEndDate = new DateTime(2026, 9, 30)
+                },
+                ExperimentPhases = new List<ExperimentPhase>
+                {
+                    new ExperimentPhase { PhaseId = 1, PhaseOrder = 1, ExpectedStartDate = new DateTime(2026, 9, 1), ExpectedEndDate = new DateTime(2026, 9, 30) }
+                },
+                Settings = new OptimizationSettings
+                {
+                    PopulationSize = 2,
+                    GenerationCount = 1,
+                    EliteCount = 1,
+                    TopSuggestionCount = 2
+                }
+            };
+
+            var infeasible = new AllocationChromosome
+            {
+                FitnessScore = 88.0,
+                HardViolationCount = 2,
+                SoftViolationCount = 0,
+                Genes = new List<AllocationGene>
+                {
+                    new AllocationGene { PhaseId = 1, StartDate = new DateTime(2026, 9, 1), EndDate = new DateTime(2026, 9, 30) }
+                }
+            };
+
+            var feasible = new AllocationChromosome
+            {
+                FitnessScore = 75.0,
+                HardViolationCount = 0,
+                SoftViolationCount = 0,
+                Genes = new List<AllocationGene>
+                {
+                    new AllocationGene { PhaseId = 1, StartDate = new DateTime(2026, 9, 1), EndDate = new DateTime(2026, 9, 30) }
+                }
+            };
+
+            var popGenMock = new Mock<IPopulationGenerator>();
+            popGenMock.Setup(g => g.Generate(input))
+                .Returns(new Population { Chromosomes = new List<AllocationChromosome> { infeasible, feasible } });
+
+            var fitCalcMock = new Mock<IFitnessCalculator>();
+            var selMock = new Mock<ISelectionOperator>();
+            selMock.Setup(s => s.Select(It.IsAny<IReadOnlyList<AllocationChromosome>>(), It.IsAny<OptimizationSettings>()))
+                .Returns(feasible);
+
+            var crossMock = new Mock<ICrossoverOperator>();
+            crossMock.Setup(c => c.Crossover(It.IsAny<AllocationChromosome>(), It.IsAny<AllocationChromosome>(), It.IsAny<OptimizationSettings>()))
+                .Returns((feasible.Clone(), infeasible.Clone()));
+
+            var mutMock = new Mock<IMutationOperator>();
+
+            var service = new GeneticAlgorithmService(
+                popGenMock.Object,
+                fitCalcMock.Object,
+                selMock.Object,
+                crossMock.Object,
+                mutMock.Object);
+
+            // Act
+            var suggestions = service.GenerateSuggestions(input);
+
+            // Assert
+            Assert.NotNull(suggestions);
+            Assert.True(suggestions.Count >= 2);
+            Assert.Equal(1, suggestions[0].Rank);
+            Assert.Equal(75.0, suggestions[0].FitnessScore);
+            Assert.True(suggestions[0].IsFeasible);
+            Assert.Equal(0, suggestions[0].HardViolationCount);
+        }
     }
 }

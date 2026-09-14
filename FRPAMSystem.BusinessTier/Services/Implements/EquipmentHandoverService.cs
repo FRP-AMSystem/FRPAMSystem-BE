@@ -12,9 +12,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
 {
     public class EquipmentHandoverService : IEquipmentHandoverService
     {
-        private const string DefaultStatus = "Pending";
-        private const string ConfirmedStatus = "Confirmed";
-
         private readonly IUnitOfWork _unitOfWork;
         private readonly IAllocationEquipmentDetailService _allocationEquipmentDetailService;
         private readonly IClock _clock;
@@ -101,32 +98,13 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                     "Equipment must be in Reserved or Allocated status before handover.");
             }
 
-            var now = _clock.Now;
+            var handover = await CreateConfirmedHandoverInternalAsync(
+                detail,
+                handedOverBy: userId,
+                receivedBy: userId,
+                conditionBefore: request?.ConditionBefore,
+                note: request?.Note);
 
-            var handover = new EquipmentHandover
-            {
-                AllocationEquipmentDetailId = detail.AllocationEquipmentDetailId,
-                EquipmentInstanceId = detail.EquipmentInstanceId,
-                HandedOverBy = userId,
-                ReceivedBy = userId,
-                HandoverDate = now,
-                Quantity = detail.Quantity,
-                ConditionBefore = request?.ConditionBefore,
-                Note = request?.Note,
-                Status = ConfirmedStatus,
-                ConfirmedAt = now
-            };
-
-            detail.Status = AllocationDetailStatus.InUse.ToString();
-
-            if (detail.EquipmentInstanceId.HasValue && detail.EquipmentInstance != null)
-            {
-                detail.EquipmentInstance.Status = EquipmentInstanceStatus.InUse.ToString();
-                _unitOfWork.GetRepository<EquipmentInstance>().Update(detail.EquipmentInstance);
-            }
-
-            await _unitOfWork.GetRepository<EquipmentHandover>().InsertAsync(handover);
-            _unitOfWork.GetRepository<AllocationEquipmentDetail>().Update(detail);
             await _unitOfWork.CommitAsync();
 
             return MapToResponse(handover);
@@ -146,7 +124,9 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 Quantity = request.Quantity,
                 ConditionBefore = request.ConditionBefore,
                 Note = request.Note,
-                Status = string.IsNullOrWhiteSpace(request.Status) ? DefaultStatus : request.Status.Trim(),
+                Status = string.IsNullOrWhiteSpace(request.Status)
+                    ? EquipmentHandoverStatus.Pending.ToString()
+                    : request.Status.Trim(),
                 ConfirmedAt = request.ConfirmedAt
             };
 
@@ -255,6 +235,43 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             {
                 throw new Exception($"{label} does not exist.");
             }
+        }
+
+        internal async Task<EquipmentHandover> CreateConfirmedHandoverInternalAsync(
+            AllocationEquipmentDetail detail,
+            int handedOverBy,
+            int receivedBy,
+            string? conditionBefore,
+            string? note)
+        {
+            var now = _clock.Now;
+
+            var handover = new EquipmentHandover
+            {
+                AllocationEquipmentDetailId = detail.AllocationEquipmentDetailId,
+                EquipmentInstanceId = detail.EquipmentInstanceId,
+                HandedOverBy = handedOverBy,
+                ReceivedBy = receivedBy,
+                HandoverDate = now,
+                Quantity = detail.Quantity,
+                ConditionBefore = conditionBefore,
+                Note = note,
+                Status = EquipmentHandoverStatus.Confirmed.ToString(),
+                ConfirmedAt = now
+            };
+
+            detail.Status = AllocationDetailStatus.InUse.ToString();
+
+            if (detail.EquipmentInstanceId.HasValue && detail.EquipmentInstance != null)
+            {
+                detail.EquipmentInstance.Status = EquipmentInstanceStatus.InUse.ToString();
+                _unitOfWork.GetRepository<EquipmentInstance>().Update(detail.EquipmentInstance);
+            }
+
+            await _unitOfWork.GetRepository<EquipmentHandover>().InsertAsync(handover);
+            _unitOfWork.GetRepository<AllocationEquipmentDetail>().Update(detail);
+
+            return handover;
         }
 
         private static EquipmentHandoverResponse MapToResponse(EquipmentHandover handover)
