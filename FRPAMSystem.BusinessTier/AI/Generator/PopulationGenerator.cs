@@ -209,19 +209,28 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
             OptimizationInput input)
         {
             var score = 0d;
+            if (human.User?.RoleId == requirement.RoleId)
+            {
+                score += 50d;
+            }
+            else
+            {
+                score -= 40d;
+            }
+
             if (requirement.RequiredSkillId is null ||
                 human.HumanResourceSkills.Any(s => s.SkillId == requirement.RequiredSkillId.Value))
             {
-                score += 50d;
+                score += 40d;
             }
 
             if (!input.ExistingHumanAllocations.Any(a => a.HumanResourceId == human.HumanResourceId && Overlaps(startDate, endDate, a.StartDate, a.EndDate)) &&
                 !input.ExistingSchedules.Any(s => s.AssignedHumanResourceId == human.HumanResourceId && Overlaps(startDate, endDate, s.StartDate, s.EndDate)))
             {
-                score += 35d;
+                score += 30d;
             }
 
-            score += Math.Max(0d, 25d - human.CurrentWorkload);
+            score += Math.Max(0d, 20d - human.CurrentWorkload);
             return score;
         }
 
@@ -237,14 +246,18 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
             {
                 score += 60d;
             }
-            else
+            else if (requirement.AllowSubstitute)
             {
                 var substitution = input.EquipmentSubstitutions.FirstOrDefault(s =>
                     s.PrimaryEquipmentTypeId == requirement.EquipmentTypeId &&
                     s.SubEquipmentTypeId == equipment.EquipmentTypeId);
                 if (substitution is not null)
                 {
-                    score += 35d * substitution.EfficiencyRate;
+                    if (!requirement.MinAcceptableEfficiency.HasValue ||
+                        substitution.EfficiencyRate >= requirement.MinAcceptableEfficiency.Value)
+                    {
+                        score += 35d * substitution.EfficiencyRate;
+                    }
                 }
             }
 
@@ -279,11 +292,22 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
                 };
             }
 
+            if (!requirement.AllowSubstitute)
+            {
+                return null;
+            }
+
             var substitution = input.EquipmentSubstitutions.FirstOrDefault(s =>
                 s.PrimaryEquipmentTypeId == requirement.EquipmentTypeId &&
                 s.SubEquipmentTypeId == equipment.EquipmentTypeId);
 
             if (substitution is null)
+            {
+                return null;
+            }
+
+            if (requirement.MinAcceptableEfficiency.HasValue &&
+                substitution.EfficiencyRate < requirement.MinAcceptableEfficiency.Value)
             {
                 return null;
             }
@@ -332,7 +356,13 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
         {
             var phaseRequirements = input.PhaseEquipmentRequirements
                 .Where(r => r.PhaseId == phaseId)
-                .Select(r => new EquipmentRequirementSnapshot(r.PhaseEquipmentReqId, null, r.EquipmentTypeId, r.Quantity))
+                .Select(r =>
+                {
+                    var expReq = input.ExperimentEquipmentRequirements.FirstOrDefault(er => er.EquipmentTypeId == r.EquipmentTypeId);
+                    var allowSubstitute = expReq?.AllowSubstitute ?? true;
+                    var minEfficiency = expReq?.MinAcceptableEfficiency;
+                    return new EquipmentRequirementSnapshot(r.PhaseEquipmentReqId, null, r.EquipmentTypeId, r.Quantity, allowSubstitute, minEfficiency);
+                })
                 .ToList();
 
             if (phaseRequirements.Count > 0)
@@ -341,7 +371,13 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
             }
 
             return input.ExperimentEquipmentRequirements
-                .Select(r => new EquipmentRequirementSnapshot(null, r.ExpEquipmentReqId, r.EquipmentTypeId, r.Quantity));
+                .Select(r => new EquipmentRequirementSnapshot(
+                    null,
+                    r.ExpEquipmentReqId,
+                    r.EquipmentTypeId,
+                    r.Quantity,
+                    r.AllowSubstitute,
+                    r.MinAcceptableEfficiency));
         }
 
         private static bool IsAvailableStatus(string? status)
@@ -353,7 +389,7 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
 
         private static bool Overlaps(DateTime startA, DateTime endA, DateTime startB, DateTime endB)
         {
-            return startA <= endB && startB <= endA;
+            return startA.Date < endB.Date && startB.Date < endA.Date;
         }
 
         private static string CreateFingerprint(AllocationChromosome chromosome)
@@ -377,6 +413,8 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
             int? PhaseEquipmentRequirementId,
             int? ExperimentEquipmentRequirementId,
             int EquipmentTypeId,
-            int Quantity);
+            int Quantity,
+            bool AllowSubstitute = true,
+            double? MinAcceptableEfficiency = null);
     }
 }

@@ -16,6 +16,12 @@ namespace FRPAMSystem.BusinessTier.AI.DTO
 
         public int ConflictCount { get; set; }
 
+        public int HardViolationCount { get; set; }
+
+        public int SoftViolationCount { get; set; }
+
+        public bool IsFeasible { get; set; }
+
         public DateTime EstimatedCompletionTime { get; set; }
 
         public List<AllocatedLandDTO> AllocatedLands { get; set; } = new();
@@ -46,10 +52,58 @@ namespace FRPAMSystem.BusinessTier.AI.DTO
         public double BonusScore { get; set; }
 
         public double FinalScore { get; set; }
+
+        public string OverallCalculation { get; set; } = string.Empty;
+
+        public ScoreExplanationDTO Land { get; set; } = new();
+
+        public ScoreExplanationDTO Human { get; set; } = new();
+
+        public ScoreExplanationDTO Equipment { get; set; } = new();
+
+        public ScoreExplanationDTO Schedule { get; set; } = new();
+
+        public List<ScoreAdjustmentDTO> Penalties { get; set; } = new();
+
+        public List<ScoreAdjustmentDTO> Bonuses { get; set; } = new();
+    }
+
+    public class ScoreAdjustmentDTO
+    {
+        public string Factor { get; set; } = string.Empty;
+
+        public double Points { get; set; }
+
+        public string Type { get; set; } = string.Empty;
+
+        public string Reason { get; set; } = string.Empty;
+
+        public string Calculation { get; set; } = string.Empty;
+    }
+
+    public class ScoreExplanationDTO
+    {
+        public double BaseScore { get; set; }
+
+        public double FinalScore { get; set; }
+
+        public string Calculation { get; set; } = string.Empty;
+
+        public List<ScoreAdjustmentDTO> Adjustments { get; set; } = new();
+
+        public List<ScoreAdjustmentDTO> Penalties { get; set; } = new();
+
+        public List<ScoreAdjustmentDTO> Bonuses { get; set; } = new();
     }
 
     public class ConstraintReportDTO
     {
+        public int HardViolationCount { get; set; }
+
+        public int SoftViolationCount { get; set; }
+
+        public bool IsFeasible => HardViolationCount == 0;
+
         public List<string> LandConflicts { get; set; } = new();
 
         public List<string> HumanConflicts { get; set; } = new();

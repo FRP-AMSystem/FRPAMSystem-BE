@@ -51,8 +51,12 @@ namespace FRPAMSystem.BusinessTier
             services.AddScoped<IAllocationLandDetailService, AllocationLandDetailService>();
             services.AddScoped<IAllocationEquipmentDetailService, AllocationEquipmentDetailService>();
             services.AddScoped<IAllocationHumanDetailService, AllocationHumanDetailService>();
-            services.AddScoped<IEquipmentHandoverService, EquipmentHandoverService>();
-            services.AddScoped<IEquipmentReturnService, EquipmentReturnService>();
+            services.AddScoped<EquipmentHandoverService>();
+            services.AddScoped<IEquipmentHandoverService>(sp => sp.GetRequiredService<EquipmentHandoverService>());
+            services.AddScoped<EquipmentReturnService>();
+            services.AddScoped<IEquipmentReturnService>(sp => sp.GetRequiredService<EquipmentReturnService>());
+            services.AddScoped<IEquipmentExtensionRequestService, EquipmentExtensionRequestService>();
+            services.AddScoped<IEquipmentChangeRequestService, EquipmentChangeRequestService>();
             services.AddScoped<IEquipmentShortageLogService, EquipmentShortageLogService>();
             services.AddScoped<IEquipmentSubstitutionService, EquipmentSubstitutionService>();
             services.AddScoped<IScheduleService, ScheduleService>();

@@ -153,6 +153,8 @@ namespace FRPAMSystem_BE.Filters
                 { "EquipmentInstances", "EquipmentInstance" },
                 { "EquipmentHandovers", "EquipmentHandover" },
                 { "EquipmentReturns", "EquipmentReturn" },
+                { "EquipmentExtensionRequests", "EquipmentExtensionRequest" },
+                { "EquipmentChangeRequests", "EquipmentChangeRequest" },
                 { "EquipmentShortageLogs", "EquipmentShortageLog" },
                 { "EquipmentSubstitutions", "EquipmentSubstitution" },
                 { "EquipmentTypes", "EquipmentType" },
