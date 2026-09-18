@@ -75,8 +75,14 @@ namespace FRPAMSystem.BusinessTier.AI.Services
                     AddIfUnique(nextGeneration, fingerprints, secondChild, input.Settings.PopulationSize);
                 }
 
-                while (nextGeneration.Count < input.Settings.PopulationSize)
+                var fallbackAttempts = 0;
+                var maxFallbackAttempts = input.Settings.PopulationSize * 5;
+
+                while (nextGeneration.Count < input.Settings.PopulationSize &&
+                       fallbackAttempts < maxFallbackAttempts)
                 {
+                    fallbackAttempts++;
+
                     var parent = _selectionOperator.Select(ordered, input.Settings);
                     var candidate = parent.Clone();
 
@@ -153,6 +159,7 @@ namespace FRPAMSystem.BusinessTier.AI.Services
                     LandScore = Math.Round(chromosome.FitnessBreakdown.LandScore, 2),
                     HumanScore = Math.Round(chromosome.FitnessBreakdown.HumanScore, 2),
                     EquipmentScore = Math.Round(chromosome.FitnessBreakdown.EquipmentScore, 2),
+                    MaintenanceScore = Math.Round(chromosome.FitnessBreakdown.MaintenanceScore, 2),
                     PenaltyScore = Math.Round(chromosome.FitnessBreakdown.PenaltyScore, 2),
                     BonusScore = Math.Round(chromosome.FitnessBreakdown.BonusScore, 2),
                     FinalScore = Math.Round(chromosome.FitnessBreakdown.FinalScore, 2),
@@ -160,6 +167,7 @@ namespace FRPAMSystem.BusinessTier.AI.Services
                     Land = MapExplanationDTO(chromosome.FitnessBreakdown.Land),
                     Human = MapExplanationDTO(chromosome.FitnessBreakdown.Human),
                     Equipment = MapExplanationDTO(chromosome.FitnessBreakdown.Equipment),
+                    Maintenance = MapExplanationDTO(chromosome.FitnessBreakdown.Maintenance),
                     Penalties = chromosome.FitnessBreakdown.Penalties.Select(MapAdjustmentDTO).ToList(),
                     Bonuses = chromosome.FitnessBreakdown.Bonuses.Select(MapAdjustmentDTO).ToList()
                 },
@@ -278,7 +286,18 @@ namespace FRPAMSystem.BusinessTier.AI.Services
                 Calculation = explanation.Calculation,
                 Adjustments = explanation.Adjustments.Select(MapAdjustmentDTO).ToList(),
                 Penalties = explanation.Penalties.Select(MapAdjustmentDTO).ToList(),
-                Bonuses = explanation.Bonuses.Select(MapAdjustmentDTO).ToList()
+                Bonuses = explanation.Bonuses.Select(MapAdjustmentDTO).ToList(),
+                Phases = explanation.Phases.Select(p => new PhaseScoreExplanationDTO
+                {
+                    PhaseId = p.PhaseId,
+                    BaseScore = p.BaseScore,
+                    SubScores = p.SubScores.Select(MapAdjustmentDTO).ToList(),
+                    Adjustments = p.Adjustments.Select(MapAdjustmentDTO).ToList(),
+                    Bonuses = p.Bonuses.Select(MapAdjustmentDTO).ToList(),
+                    Penalties = p.Penalties.Select(MapAdjustmentDTO).ToList(),
+                    FinalScore = p.FinalScore,
+                    Calculation = p.Calculation
+                }).ToList()
             };
         }
 

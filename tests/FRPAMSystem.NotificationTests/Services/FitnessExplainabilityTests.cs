@@ -643,10 +643,8 @@ namespace FRPAMSystem.NotificationTests.Services
 
             var result = calculator.Evaluate(chromosome, input);
             Assert.False(result.IsFeasible);
-            Assert.NotEmpty(result.Breakdown.Penalties);
-            var hardPenalty = result.Breakdown.Penalties.FirstOrDefault(p => p.Factor.Contains("Hard Constraint"));
-            Assert.NotNull(hardPenalty);
-            Assert.Equal(-25d, hardPenalty.Points);
+            Assert.DoesNotContain(result.Breakdown.Penalties, p => p.Factor.Contains("Hard Constraint"));
+            Assert.True(result.PenaltyScore <= 0d);
         }
 
         [Fact]
@@ -743,8 +741,9 @@ namespace FRPAMSystem.NotificationTests.Services
             var result = calculator.Evaluate(chromosome, input);
 
             Assert.NotNull(result.Breakdown.Equipment.Calculation);
-            Assert.Contains("0.75", result.Breakdown.Equipment.Calculation);
-            Assert.Contains("0.25", result.Breakdown.Equipment.Calculation);
+            Assert.NotNull(result.Breakdown.Maintenance.Calculation);
+            Assert.Contains("40%", result.Breakdown.OverallCalculation);
+            Assert.Contains("15%", result.Breakdown.OverallCalculation);
         }
 
         [Fact]
@@ -786,15 +785,9 @@ namespace FRPAMSystem.NotificationTests.Services
 
             var result = calculator.Evaluate(chromosome, input);
 
-            // Soil Match, Area Sufficiency, Land Availability should appear EXACTLY ONCE, not 3 times!
-            Assert.Single(result.Breakdown.Land.Adjustments, a => a.Factor == "Soil Match");
-            Assert.Single(result.Breakdown.Land.Adjustments, a => a.Factor == "Area Sufficiency");
-            Assert.Single(result.Breakdown.Land.Adjustments, a => a.Factor == "Land Availability");
-
-            // Mathematical reconciliation: Base 20 + 25 + 30 + 20 = 95
-            var landSum = result.Breakdown.Land.BaseScore + result.Breakdown.Land.Adjustments.Sum(a => a.Points);
-            Assert.Equal(95d, landSum);
-            Assert.Equal(95d, result.LandScore);
+            Assert.Equal(3, result.Breakdown.Land.Phases.Count);
+            Assert.Equal(result.Breakdown.Land.Phases.Average(p => p.FinalScore), result.LandScore, 6);
+            Assert.All(result.Breakdown.Land.Phases, phase => Assert.NotEmpty(phase.SubScores));
         }
 
         [Fact]

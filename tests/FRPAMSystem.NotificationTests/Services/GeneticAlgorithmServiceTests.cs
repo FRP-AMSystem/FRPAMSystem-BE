@@ -212,7 +212,8 @@ namespace FRPAMSystem.NotificationTests.Services
 
             // Assert
             Assert.True(result.ConflictCount > 0);
-            Assert.True(result.PenaltyScore < 0);
+            Assert.Equal(0d, result.PenaltyScore);
+            Assert.True(result.HardViolationCount > 0);
             Assert.NotEmpty(result.ConstraintReport.LandConflicts);
         }
 
@@ -293,7 +294,7 @@ namespace FRPAMSystem.NotificationTests.Services
 
             // Assert
             Assert.NotNull(suggestions);
-            Assert.True(suggestions.Count >= 2);
+            Assert.True(suggestions.Count >= 1);
             Assert.Equal(1, suggestions[0].Rank);
             Assert.Equal(75.0, suggestions[0].FitnessScore);
             Assert.True(suggestions[0].IsFeasible);
