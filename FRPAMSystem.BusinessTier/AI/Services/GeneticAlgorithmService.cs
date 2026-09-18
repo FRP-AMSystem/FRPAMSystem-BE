@@ -63,7 +63,10 @@ namespace FRPAMSystem.BusinessTier.AI.Services
                     reproductionAttempts++;
                     var firstParent = _selectionOperator.Select(ordered, input.Settings);
                     var secondParent = _selectionOperator.Select(ordered, input.Settings);
-                    var (firstChild, secondChild) = _crossoverOperator.Crossover(firstParent, secondParent, input.Settings);
+                    var (crossedFirstChild, crossedSecondChild) =
+                        _crossoverOperator.Crossover(firstParent, secondParent, input.Settings);
+                    var firstChild = crossedFirstChild.Clone();
+                    var secondChild = crossedSecondChild.Clone();
 
                     _mutationOperator.Mutate(firstChild, input, generation);
                     _mutationOperator.Mutate(secondChild, input, generation);
@@ -75,8 +78,15 @@ namespace FRPAMSystem.BusinessTier.AI.Services
                 while (nextGeneration.Count < input.Settings.PopulationSize)
                 {
                     var parent = _selectionOperator.Select(ordered, input.Settings);
-                    _mutationOperator.Mutate(parent, input, generation);
-                    nextGeneration.Add(parent);
+                    var candidate = parent.Clone();
+
+                    _mutationOperator.Mutate(candidate, input, generation);
+
+                    AddIfUnique(
+                        nextGeneration,
+                        fingerprints,
+                        candidate,
+                        input.Settings.PopulationSize);
                 }
 
                 static void AddIfUnique(
@@ -286,12 +296,7 @@ namespace FRPAMSystem.BusinessTier.AI.Services
 
         private static string CreateFingerprint(AllocationChromosome chromosome)
         {
-            return string.Join('|', chromosome.Genes
-                .OrderBy(g => g.PhaseId)
-                .Select(g =>
-                    $"{g.PhaseId}:{g.LandId}:{g.StartDate:yyyyMMdd}:{g.EndDate:yyyyMMdd}:" +
-                    $"{string.Join(',', g.AssignedHumanResourceIds.OrderBy(id => id))}:" +
-                    $"{string.Join(',', g.EquipmentAssignments.Select(e => e.EquipmentInstanceId).OrderBy(id => id))}"));
+            return AllocationChromosomeFingerprint.Create(chromosome);
         }
     }
 }
