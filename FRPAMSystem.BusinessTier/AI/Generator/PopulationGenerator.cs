@@ -96,9 +96,6 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
                          input.ExperimentPhases.First(p => p.PhaseId == gene.PhaseId).ExpectedStartDate.Date).Days);
                     ApplySubstitutionDuration(gene, baseDurationDays);
                     break;
-                case MutationComponent.Schedule:
-                    MutateSchedule(gene, input);
-                    break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(component), component, null);
             }
@@ -122,19 +119,6 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
                 (int)Math.Ceiling(baseDurationDays * timeMultiplier));
 
             gene.EndDate = gene.StartDate.AddDays(adjustedDurationDays);
-        }
-
-        private void MutateSchedule(AllocationGene gene, OptimizationInput input)
-        {
-            var maxShift = Math.Min(1, input.Settings.MaxScheduleShiftDays);
-            if (maxShift == 0)
-            {
-                return;
-            }
-
-            var shift = _random.Next(-maxShift, maxShift + 1);
-            gene.StartDate = gene.StartDate.Date.AddDays(shift);
-            gene.EndDate = gene.EndDate.Date.AddDays(shift);
         }
 
         private void AssignLand(
