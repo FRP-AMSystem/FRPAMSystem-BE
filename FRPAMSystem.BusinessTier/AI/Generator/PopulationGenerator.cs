@@ -7,6 +7,15 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
     {
         private readonly Random _random = new();
 
+        public PopulationGenerator()
+        {
+        }
+
+        public PopulationGenerator(Random random)
+        {
+            _random = random;
+        }
+
         public Population Generate(OptimizationInput input)
         {
             input.Settings.Normalize();
@@ -64,6 +73,37 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
             return gene;
         }
 
+        public void MutateComponent(
+            AllocationGene gene,
+            OptimizationInput input,
+            MutationComponent component)
+        {
+            switch (component)
+            {
+                case MutationComponent.Land:
+                    AssignLand(gene, input, preserveRequirementMetadata: true);
+                    break;
+                case MutationComponent.Human:
+                    AssignHumans(gene, input);
+                    break;
+                case MutationComponent.Equipment:
+                    gene.AssignedEquipmentInstanceIds.Clear();
+                    gene.EquipmentAssignments.Clear();
+                    AssignEquipment(gene, input);
+                    var baseDurationDays = Math.Max(
+                        1,
+                        (input.ExperimentPhases.First(p => p.PhaseId == gene.PhaseId).ExpectedEndDate.Date -
+                         input.ExperimentPhases.First(p => p.PhaseId == gene.PhaseId).ExpectedStartDate.Date).Days);
+                    ApplySubstitutionDuration(gene, baseDurationDays);
+                    break;
+                case MutationComponent.Schedule:
+                    MutateSchedule(gene, input);
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(component), component, null);
+            }
+        }
+
         private static void ApplySubstitutionDuration(
             AllocationGene gene,
             int baseDurationDays)
@@ -84,13 +124,32 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
             gene.EndDate = gene.StartDate.AddDays(adjustedDurationDays);
         }
 
-        private void AssignLand(AllocationGene gene, OptimizationInput input)
+        private void MutateSchedule(AllocationGene gene, OptimizationInput input)
+        {
+            var maxShift = Math.Min(1, input.Settings.MaxScheduleShiftDays);
+            if (maxShift == 0)
+            {
+                return;
+            }
+
+            var shift = _random.Next(-maxShift, maxShift + 1);
+            gene.StartDate = gene.StartDate.Date.AddDays(shift);
+            gene.EndDate = gene.EndDate.Date.AddDays(shift);
+        }
+
+        private void AssignLand(
+            AllocationGene gene,
+            OptimizationInput input,
+            bool preserveRequirementMetadata = false)
         {
             var requirement = input.ExperimentLandRequirements
                 .OrderByDescending(r => r.RequiredArea)
                 .FirstOrDefault();
 
-            gene.ExperimentLandRequirementId = requirement?.ExpLandReqId;
+            if (!preserveRequirementMetadata)
+            {
+                gene.ExperimentLandRequirementId = requirement?.ExpLandReqId;
+            }
 
             var candidates = input.LandResources
                 .Where(l => IsAvailableStatus(l.Status))
