@@ -46,10 +46,7 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
         {
             var phase = input.ExperimentPhases.First(p => p.PhaseId == phaseId);
             var durationDays = Math.Max(1, (phase.ExpectedEndDate.Date - phase.ExpectedStartDate.Date).Days);
-            var shift = input.Settings.MaxScheduleShiftDays == 0
-                ? 0
-                : _random.Next(0, input.Settings.MaxScheduleShiftDays + 1);
-            var startDate = phase.ExpectedStartDate.Date.AddDays(shift);
+            var startDate = phase.ExpectedStartDate.Date;
             var endDate = startDate.AddDays(durationDays);
 
             var gene = new AllocationGene
@@ -224,8 +221,7 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
                 score += 40d;
             }
 
-            if (!input.ExistingHumanAllocations.Any(a => a.HumanResourceId == human.HumanResourceId && Overlaps(startDate, endDate, a.StartDate, a.EndDate)) &&
-                !input.ExistingSchedules.Any(s => s.AssignedHumanResourceId == human.HumanResourceId && Overlaps(startDate, endDate, s.StartDate, s.EndDate)))
+            if (!input.ExistingHumanAllocations.Any(a => a.HumanResourceId == human.HumanResourceId && Overlaps(startDate, endDate, a.StartDate, a.EndDate)))
             {
                 score += 30d;
             }

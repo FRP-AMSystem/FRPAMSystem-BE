@@ -175,8 +175,7 @@ namespace FRPAMSystem.NotificationTests.Services
                 new LandConstraintEvaluator(),
                 new HumanConstraintEvaluator(),
                 new EquipmentConstraintEvaluator(),
-                new MaintenanceConstraintEvaluator(),
-                new ScheduleConstraintEvaluator()
+                new MaintenanceConstraintEvaluator()
             };
 
             var calculator = new FitnessCalculator(evaluators);

@@ -45,8 +45,6 @@ namespace FRPAMSystem.BusinessTier.AI.DTO
 
         public double EquipmentScore { get; set; }
 
-        public double ScheduleScore { get; set; }
-
         public double PenaltyScore { get; set; }
 
         public double BonusScore { get; set; }
@@ -60,8 +58,6 @@ namespace FRPAMSystem.BusinessTier.AI.DTO
         public ScoreExplanationDTO Human { get; set; } = new();
 
         public ScoreExplanationDTO Equipment { get; set; } = new();
-
-        public ScoreExplanationDTO Schedule { get; set; } = new();
 
         public List<ScoreAdjustmentDTO> Penalties { get; set; } = new();
 
@@ -109,8 +105,6 @@ namespace FRPAMSystem.BusinessTier.AI.DTO
         public List<string> HumanConflicts { get; set; } = new();
 
         public List<string> EquipmentConflicts { get; set; } = new();
-
-        public List<string> ScheduleConflicts { get; set; } = new();
 
         public List<string> MaintenanceConflicts { get; set; } = new();
 

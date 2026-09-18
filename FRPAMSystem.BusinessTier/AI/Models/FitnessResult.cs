@@ -14,8 +14,6 @@ namespace FRPAMSystem.BusinessTier.AI.Models
 
         public double EquipmentScore { get; set; }
 
-        public double ScheduleScore { get; set; }
-
         public int ConflictCount { get; set; }
 
         public int HardViolationCount { get; set; }
@@ -41,8 +39,6 @@ namespace FRPAMSystem.BusinessTier.AI.Models
 
         public double EquipmentScore { get; set; }
 
-        public double ScheduleScore { get; set; }
-
         public double PenaltyScore { get; set; }
 
         public double BonusScore { get; set; }
@@ -56,8 +52,6 @@ namespace FRPAMSystem.BusinessTier.AI.Models
         public ScoreExplanation Human { get; set; } = new();
 
         public ScoreExplanation Equipment { get; set; } = new();
-
-        public ScoreExplanation Schedule { get; set; } = new();
 
         public List<ScoreAdjustment> Penalties { get; set; } = new();
 
@@ -130,8 +124,6 @@ namespace FRPAMSystem.BusinessTier.AI.Models
         public List<string> HumanConflicts { get; set; } = new();
 
         public List<string> EquipmentConflicts { get; set; } = new();
-
-        public List<string> ScheduleConflicts { get; set; } = new();
 
         public List<string> MaintenanceConflicts { get; set; } = new();
 

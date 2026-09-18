@@ -24,16 +24,14 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness
             var humanResult = GetResult<IHumanConstraintEvaluator>(evaluationResults);
             var equipmentResult = GetResult<IEquipmentConstraintEvaluator>(evaluationResults);
             var maintenanceResult = GetResult<IMaintenanceConstraintEvaluator>(evaluationResults);
-            var scheduleResult = GetResult<IScheduleConstraintEvaluator>(evaluationResults);
 
             var land = landResult?.Score ?? 0d;
             var human = humanResult?.Score ?? 0d;
             var equipment = equipmentResult?.Score ?? 0d;
             var maintenance = maintenanceResult?.Score ?? 0d;
-            var schedule = scheduleResult?.Score ?? 0d;
 
             var equipmentScore = Math.Clamp((equipment * 0.75d) + (maintenance * 0.25d), 0d, 100d);
-            var weightedScore = CalculateWeightedScore(input.Settings, land, human, equipmentScore, schedule);
+            var weightedScore = CalculateWeightedScore(input.Settings, land, human, equipmentScore);
 
             var violations = evaluationResults.SelectMany(r => r.Result.Violations).ToList();
             var hardCount = violations.Count(v => v.Severity == ConstraintSeverity.Hard);
@@ -142,12 +140,11 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness
 
             var totalWeight = input.Settings.LandWeight +
                               input.Settings.HumanWeight +
-                              input.Settings.EquipmentWeight +
-                              input.Settings.ScheduleWeight;
+                              input.Settings.EquipmentWeight;
 
             var weightedCalc = totalWeight > 0d
-                ? $"Weighted: ({land:F2}×{input.Settings.LandWeight:F1} + {human:F2}×{input.Settings.HumanWeight:F1} + {equipmentScore:F2}×{input.Settings.EquipmentWeight:F1} + {schedule:F2}×{input.Settings.ScheduleWeight:F1})/{totalWeight:F1} = {weightedScore:F2}"
-                : $"Weighted: ({land:F2} + {human:F2} + {equipmentScore:F2} + {schedule:F2})/4 = {weightedScore:F2}";
+                ? $"Weighted: ({land:F2}×{input.Settings.LandWeight:F1} + {human:F2}×{input.Settings.HumanWeight:F1} + {equipmentScore:F2}×{input.Settings.EquipmentWeight:F1})/{totalWeight:F1} = {weightedScore:F2}"
+                : $"Weighted: ({land:F2} + {human:F2} + {equipmentScore:F2})/3 = {weightedScore:F2}";
 
             var overallCalc = $"{weightedCalc} | Penalty: -{penalty:F2} | Bonus: +{bonus:F2} | Final Fitness: Clamp({weightedScore:F2} - {penalty:F2} + {bonus:F2}, 0, 100) = {finalScore:F2}";
 
@@ -159,7 +156,6 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness
                 LandScore = Math.Round(land, 2),
                 HumanScore = Math.Round(human, 2),
                 EquipmentScore = Math.Round(equipmentScore, 2),
-                ScheduleScore = Math.Round(schedule, 2),
                 ConflictCount = violations.Count,
                 HardViolationCount = hardCount,
                 SoftViolationCount = softCount,
@@ -172,7 +168,6 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness
                 LandScore = result.LandScore,
                 HumanScore = result.HumanScore,
                 EquipmentScore = result.EquipmentScore,
-                ScheduleScore = result.ScheduleScore,
                 PenaltyScore = result.PenaltyScore,
                 BonusScore = result.BonusScore,
                 FinalScore = Math.Round(finalScore, 2),
@@ -180,7 +175,6 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness
                 Land = landResult?.Explanation.Clone() ?? new ScoreExplanation(),
                 Human = humanResult?.Explanation.Clone() ?? new ScoreExplanation(),
                 Equipment = equipmentExplanation,
-                Schedule = scheduleResult?.Explanation.Clone() ?? new ScoreExplanation(),
                 Penalties = penalties,
                 Bonuses = bonuses
             };
@@ -194,23 +188,20 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness
             OptimizationSettings settings,
             double land,
             double human,
-            double equipment,
-            double schedule)
+            double equipment)
         {
             var totalWeight = settings.LandWeight +
                               settings.HumanWeight +
-                              settings.EquipmentWeight +
-                              settings.ScheduleWeight;
+                              settings.EquipmentWeight;
 
             if (totalWeight <= 0d)
             {
-                return (land + human + equipment + schedule) / 4d;
+                return (land + human + equipment) / 3d;
             }
 
             return ((land * settings.LandWeight) +
                     (human * settings.HumanWeight) +
-                    (equipment * settings.EquipmentWeight) +
-                    (schedule * settings.ScheduleWeight)) / totalWeight;
+                    (equipment * settings.EquipmentWeight)) / totalWeight;
         }
 
         private static ConstraintEvaluationResult? GetResult<TEvaluator>(
@@ -236,12 +227,11 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness
                     "Land" => report.LandConflicts,
                     "Human" => report.HumanConflicts,
                     "Equipment" => report.EquipmentConflicts,
-                    "Schedule" => report.ScheduleConflicts,
                     "Maintenance" => report.MaintenanceConflicts,
                     "Skill" => report.SkillConflicts,
                     "Role" => report.RoleConflicts,
                     "Deadline" => report.DeadlineConflicts,
-                    _ => report.ScheduleConflicts
+                    _ => report.HumanConflicts
                 };
 
                 if (!target.Contains(violation.Message))
@@ -261,7 +251,6 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness
             chromosome.LandScore = result.LandScore;
             chromosome.HumanScore = result.HumanScore;
             chromosome.EquipmentScore = result.EquipmentScore;
-            chromosome.ScheduleScore = result.ScheduleScore;
             chromosome.BonusScore = result.BonusScore;
             chromosome.FitnessBreakdown = result.Breakdown;
             chromosome.ConstraintReport = result.ConstraintReport;

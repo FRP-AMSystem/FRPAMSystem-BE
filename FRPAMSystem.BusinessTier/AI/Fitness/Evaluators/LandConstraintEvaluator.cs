@@ -180,6 +180,20 @@
                     Add(result, ConstraintSeverity.Hard, "Land is double-booked inside the candidate plan.");
                 }
 
+                // Check deadline violations (unrelated to Schedule entity)
+                if (input.Experiment?.Deadline.HasValue == true)
+                {
+                    foreach (var gene in chromosome.Genes)
+                    {
+                        if (gene.EndDate > input.Experiment.Deadline!.Value)
+                        {
+                            result.Violations.Add(new ConstraintViolation("Deadline", ConstraintSeverity.Soft,
+                                $"Phase {gene.PhaseId} ends after the experiment deadline."));
+                            result.Disadvantages.Add($"Phase {gene.PhaseId} ends after the experiment deadline.");
+                        }
+                    }
+                }
+
                 result.Score = scoreParts.Count == 0 ? 0d : scoreParts.Average();
                 result.Explanation = new ScoreExplanation
                 {

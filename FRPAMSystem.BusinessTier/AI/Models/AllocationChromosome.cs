@@ -16,7 +16,6 @@ namespace FRPAMSystem.BusinessTier.AI.Models
 
         public double EquipmentScore { get; set; }
 
-        public double ScheduleScore { get; set; }
 
         public int ConflictCount { get; set; }
 
@@ -45,7 +44,6 @@ namespace FRPAMSystem.BusinessTier.AI.Models
                 LandScore = LandScore,
                 HumanScore = HumanScore,
                 EquipmentScore = EquipmentScore,
-                ScheduleScore = ScheduleScore,
                 ConflictCount = ConflictCount,
                 HardViolationCount = HardViolationCount,
                 SoftViolationCount = SoftViolationCount,
@@ -54,7 +52,6 @@ namespace FRPAMSystem.BusinessTier.AI.Models
                     LandScore = FitnessBreakdown.LandScore,
                     HumanScore = FitnessBreakdown.HumanScore,
                     EquipmentScore = FitnessBreakdown.EquipmentScore,
-                    ScheduleScore = FitnessBreakdown.ScheduleScore,
                     PenaltyScore = FitnessBreakdown.PenaltyScore,
                     BonusScore = FitnessBreakdown.BonusScore,
                     FinalScore = FitnessBreakdown.FinalScore,
@@ -62,7 +59,6 @@ namespace FRPAMSystem.BusinessTier.AI.Models
                     Land = FitnessBreakdown.Land.Clone(),
                     Human = FitnessBreakdown.Human.Clone(),
                     Equipment = FitnessBreakdown.Equipment.Clone(),
-                    Schedule = FitnessBreakdown.Schedule.Clone(),
                     Penalties = FitnessBreakdown.Penalties.Select(p => p.Clone()).ToList(),
                     Bonuses = FitnessBreakdown.Bonuses.Select(b => b.Clone()).ToList()
                 },
@@ -71,7 +67,6 @@ namespace FRPAMSystem.BusinessTier.AI.Models
                     LandConflicts = ConstraintReport.LandConflicts.ToList(),
                     HumanConflicts = ConstraintReport.HumanConflicts.ToList(),
                     EquipmentConflicts = ConstraintReport.EquipmentConflicts.ToList(),
-                    ScheduleConflicts = ConstraintReport.ScheduleConflicts.ToList(),
                     MaintenanceConflicts = ConstraintReport.MaintenanceConflicts.ToList(),
                     SkillConflicts = ConstraintReport.SkillConflicts.ToList(),
                     RoleConflicts = ConstraintReport.RoleConflicts.ToList(),
