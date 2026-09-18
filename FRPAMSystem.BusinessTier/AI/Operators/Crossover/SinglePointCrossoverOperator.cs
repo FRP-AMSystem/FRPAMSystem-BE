@@ -15,7 +15,11 @@ namespace FRPAMSystem.BusinessTier.AI.Operators.Crossover
                 secondParent.Genes.Count < 2 ||
                 _random.NextDouble() > settings.CrossoverRate)
             {
-                return (firstParent.Clone(), secondParent.Clone());
+                var firstClone = firstParent.Clone();
+                var secondClone = secondParent.Clone();
+                NormalizeLandAssignments(firstClone);
+                NormalizeLandAssignments(secondClone);
+                return (firstClone, secondClone);
             }
 
             var cutPoint = _random.Next(1, Math.Min(firstParent.Genes.Count, secondParent.Genes.Count));
@@ -36,7 +40,23 @@ namespace FRPAMSystem.BusinessTier.AI.Operators.Crossover
                     .ToList()
             };
 
+            NormalizeLandAssignments(firstChild);
+            NormalizeLandAssignments(secondChild);
             return (firstChild, secondChild);
+        }
+
+        private static void NormalizeLandAssignments(AllocationChromosome chromosome)
+        {
+            var landId = chromosome.Genes.Select(g => g.LandId).FirstOrDefault(id => id.HasValue);
+            if (!landId.HasValue)
+            {
+                return;
+            }
+
+            foreach (var gene in chromosome.Genes)
+            {
+                gene.LandId = landId;
+            }
         }
     }
 }

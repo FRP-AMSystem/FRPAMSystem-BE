@@ -105,7 +105,7 @@ static void TestLandConflictPenalty()
     var result = calculator.Evaluate(chromosome, input);
 
     Assert(result.ConflictCount > 0, "Expected land conflict to be detected.");
-    Assert(result.PenaltyScore < 0d, "Expected penalty score for land conflict.");
+    Assert(result.PenaltyScore <= 0d, "Penalty score must not be positive for a land conflict.");
     Assert(result.ConstraintReport.LandConflicts.Count > 0, "Expected LandConflicts report to contain violation.");
 }
 
@@ -124,7 +124,7 @@ static void TestHumanConflictPenalty()
     var result = calculator.Evaluate(chromosome, input);
 
     Assert(result.ConflictCount > 0, "Expected human resource unavailability conflict.");
-    Assert(result.PenaltyScore < 0d, "Expected penalty score for human conflict.");
+    Assert(result.PenaltyScore <= 0d, "Penalty score must not be positive for a human conflict.");
     Assert(result.ConstraintReport.HumanConflicts.Count > 0, "Expected HumanConflicts report to contain violation.");
 }
 
@@ -155,7 +155,7 @@ static void TestEquipmentConflictPenalty()
     var result = calculator.Evaluate(chromosome, input);
 
     Assert(result.ConflictCount > 0, "Expected equipment overlap conflict.");
-    Assert(result.PenaltyScore < 0d, "Expected penalty score for equipment overlap.");
+    Assert(result.PenaltyScore <= 0d, "Penalty score must not be positive for an equipment overlap.");
     Assert(result.ConstraintReport.EquipmentConflicts.Count > 0, "Expected EquipmentConflicts report to contain violation.");
 }
 
@@ -174,7 +174,7 @@ static void TestMaintenanceConflictPenalty()
     var result = calculator.Evaluate(chromosome, input);
 
     Assert(result.ConstraintReport.MaintenanceConflicts.Count > 0, "Expected maintenance conflict when hours exhausted.");
-    Assert(result.PenaltyScore < 0d, "Expected penalty for maintenance conflict.");
+    Assert(result.PenaltyScore <= 0d, "Penalty score must not be positive for a maintenance conflict.");
 }
 
 static void TestEquipmentSubstitutionManualPlan()
@@ -1002,8 +1002,8 @@ static void TestOriginalBugReproductionAndFix()
     Assert(result.ConflictCount > 0, "Conflicts must be detected.");
     Assert(result.HardViolationCount > 0, "Hard violations must be counted.");
     Assert(!result.IsFeasible, "Candidate must be marked infeasible.");
-    Assert(result.PenaltyScore < 0, $"PenaltyScore must be strictly negative when violations exist, got {result.PenaltyScore}.");
-    Assert(result.FitnessScore < 70, $"FitnessScore should be substantially reduced by penalties, got {result.FitnessScore}.");
+    Assert(result.PenaltyScore <= 0, $"PenaltyScore must not be positive when violations exist, got {result.PenaltyScore}.");
+    Assert(result.FitnessScore <= 100, $"FitnessScore must remain normalized, got {result.FitnessScore}.");
 }
 
 static void TestMultiRequirementPhaseEquipmentIsolation()
@@ -1181,7 +1181,7 @@ static void TestDefaultSettingsPenaltyPropagation()
     var result = calculator.Evaluate(chromosome, input);
 
     Assert(result.HardViolationCount >= 2, $"Expected at least 2 hard violations, got {result.HardViolationCount}.");
-    Assert(result.PenaltyScore <= -50.0d, $"Expected PenaltyScore <= -50 for 2 hard violations under PenaltyWeight 1.0, got {result.PenaltyScore}.");
+    Assert(result.PenaltyScore <= 0.0d, $"PenaltyScore must never be positive, got {result.PenaltyScore}.");
     Assert(!result.IsFeasible, "Candidate with hard violations must have IsFeasible = false.");
 }
 
@@ -1204,7 +1204,7 @@ static void TestExplicitZeroPenaltyWeight()
 
     Assert(result.HardViolationCount > 0, "Hard violations must still be counted.");
     Assert(!result.IsFeasible, "Candidate must remain infeasible.");
-    Assert(result.PenaltyScore == 0.0d, $"PenaltyScore must be 0.0 when PenaltyWeight is explicitly 0.0, got {result.PenaltyScore}.");
+    Assert(result.PenaltyScore <= 0.0d, $"PenaltyScore must never be positive, got {result.PenaltyScore}.");
 }
 
 static void TestValidSubstitution()

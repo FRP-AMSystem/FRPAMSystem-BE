@@ -38,6 +38,8 @@ namespace FRPAMSystem.BusinessTier.AI.Operators.Mutation
                 var component = (MutationComponent)_random.Next(3);
                 _populationGenerator.MutateComponent(chromosome.Genes[i], input, component);
             }
+
+            PopulationGenerator.NormalizeLandAssignments(chromosome);
         }
     }
 }

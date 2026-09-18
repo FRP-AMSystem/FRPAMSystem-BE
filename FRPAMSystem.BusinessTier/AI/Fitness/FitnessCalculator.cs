@@ -38,14 +38,12 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness
 
             var violations = evaluationResults
                 .SelectMany(r => r.Result.Violations)
-                .GroupBy(v => (v.Category, v.Severity, v.Message))
-                .Select(g => g.First())
                 .ToList();
             var hardCount = violations.Count(v => v.Severity == ConstraintSeverity.Hard);
             var softCount = violations.Count(v => v.Severity == ConstraintSeverity.Soft);
-            var penalty = softCount * input.Settings.SoftConstraintPenalty * input.Settings.PenaltyWeight;
+            var penalty = softCount * input.Settings.SoftConstraintPenalty;
             var bonus = Math.Clamp(
-                evaluationResults.Sum(r => r.Result.Bonus) * input.Settings.BonusWeight,
+                evaluationResults.Sum(r => r.Result.Bonus),
                 0d,
                 input.Settings.MaximumBonus);
             var finalScore = Clamp(weightedScore - penalty + bonus);
