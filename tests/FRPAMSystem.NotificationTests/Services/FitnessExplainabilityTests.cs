@@ -120,6 +120,46 @@ namespace FRPAMSystem.NotificationTests.Services
         }
 
         [Fact]
+        public void FitnessBreakdown_ContainsOnlyResourceComponentsAndAdjustments()
+        {
+            var input = CreateBaseInput();
+            var chromosome = new AllocationChromosome
+            {
+                Genes = new List<AllocationGene>
+                {
+                    new()
+                    {
+                        PhaseId = 1,
+                        LandId = 10,
+                        ExperimentLandRequirementId = 100,
+                        StartDate = new DateTime(2026, 6, 1),
+                        EndDate = new DateTime(2026, 6, 5),
+                        AssignedHumanResourceIds = new List<int> { 20 }
+                    }
+                }
+            };
+
+            var baseline = CreateFitnessCalculator().Evaluate(chromosome.Clone(), input);
+            var result = new FitnessCalculator(new IConstraintEvaluator[]
+            {
+                new ScheduleOnlyEvaluator(),
+                new LandConstraintEvaluator(),
+                new HumanConstraintEvaluator(),
+                new EquipmentConstraintEvaluator(),
+                new MaintenanceConstraintEvaluator()
+            }).Evaluate(chromosome, input);
+
+            Assert.NotNull(result.Breakdown.Land);
+            Assert.NotNull(result.Breakdown.Human);
+            Assert.NotNull(result.Breakdown.Equipment);
+            Assert.NotNull(result.Breakdown.Penalties);
+            Assert.NotNull(result.Breakdown.Bonuses);
+            Assert.Contains("Final Fitness", result.Breakdown.OverallCalculation);
+            Assert.DoesNotContain("Schedule", result.Breakdown.OverallCalculation, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(baseline.FitnessScore, result.FitnessScore);
+        }
+
+        [Fact]
         public void Test01_PerfectFeasibleAllocation()
         {
             var input = CreateBaseInput();
@@ -785,6 +825,27 @@ namespace FRPAMSystem.NotificationTests.Services
                 Assert.NotEmpty(suggestion.FitnessBreakdown.Land.Calculation);
                 Assert.NotEmpty(suggestion.FitnessBreakdown.Human.Calculation);
                 Assert.NotEmpty(suggestion.FitnessBreakdown.Equipment.Calculation);
+            }
+        }
+
+        private sealed class ScheduleOnlyEvaluator : IConstraintEvaluator
+        {
+            public string Category => "Schedule";
+
+            public ConstraintEvaluationResult Evaluate(
+                AllocationChromosome chromosome,
+                OptimizationInput input)
+            {
+                return new ConstraintEvaluationResult
+                {
+                    Score = 0d,
+                    Penalty = 100d,
+                    Bonus = 100d,
+                    Violations = new List<ConstraintViolation>
+                    {
+                        new("Schedule", ConstraintSeverity.Hard, "Schedule quality must not affect GA fitness.")
+                    }
+                };
             }
         }
     }

@@ -17,6 +17,7 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness
             input.Settings.Normalize();
 
             var evaluationResults = _evaluators
+                .Where(evaluator => !string.Equals(evaluator.Category, "Schedule", StringComparison.OrdinalIgnoreCase))
                 .Select(evaluator => (Evaluator: evaluator, Result: evaluator.Evaluate(chromosome, input)))
                 .ToList();
 

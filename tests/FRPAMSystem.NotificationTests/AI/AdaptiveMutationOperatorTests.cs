@@ -7,11 +7,18 @@ namespace FRPAMSystem.NotificationTests.AI
 {
     public class AdaptiveMutationOperatorTests
     {
+        [Fact]
+        public void MutationComponent_ContainsOnlyResourceComponents()
+        {
+            Assert.Equal(
+                new[] { "Land", "Human", "Equipment" },
+                Enum.GetNames<MutationComponent>());
+        }
+
         [Theory]
         [InlineData(0, MutationComponent.Land)]
         [InlineData(1, MutationComponent.Human)]
         [InlineData(2, MutationComponent.Equipment)]
-        [InlineData(3, MutationComponent.Schedule)]
         public void Mutate_WhenTriggered_MutatesExactlyOneComponentAndPreservesOtherFields(
             int componentValue,
             MutationComponent expectedComponent)
@@ -193,7 +200,6 @@ namespace FRPAMSystem.NotificationTests.AI
                     GenerationCount = 1,
                     InitialMutationRate = initialMutationRate,
                     FinalMutationRate = finalMutationRate,
-                    MaxScheduleShiftDays = 1
                 }
             };
         }

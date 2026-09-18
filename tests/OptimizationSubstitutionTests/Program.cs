@@ -17,7 +17,6 @@ var tests = new (string Name, Action Test)[]
     ("3. Human conflict -> penalty", TestHumanConflictPenalty),
     ("4. Equipment conflict -> penalty", TestEquipmentConflictPenalty),
     ("5. Maintenance conflict -> penalty", TestMaintenanceConflictPenalty),
-    ("6. Schedule conflict -> penalty", TestScheduleConflictPenalty),
     ("7. Equipment substitution in manual plan", TestEquipmentSubstitutionManualPlan),
     ("8. Update plan -> fitness recalculated", TestUpdatePlanFitnessRecalculation),
     ("9. Existing AI suggestion generation still works", TestExistingAISuggestionGeneration),
@@ -176,25 +175,6 @@ static void TestMaintenanceConflictPenalty()
 
     Assert(result.ConstraintReport.MaintenanceConflicts.Count > 0, "Expected maintenance conflict when hours exhausted.");
     Assert(result.PenaltyScore < 0d, "Expected penalty for maintenance conflict.");
-}
-
-static void TestScheduleConflictPenalty()
-{
-    var input = CreateComprehensiveOptimizationInput();
-    var plan = CreateValidManualPlan();
-    // Invert phase dates so phase 2 starts before phase 1 ends
-    var p2Schedule = plan.Schedules.First(s => s.PhaseId == 2);
-    p2Schedule.StartDate = new DateTime(2026, 1, 2);
-    p2Schedule.EndDate = new DateTime(2026, 1, 4);
-
-    var mapper = new AllocationPlanChromosomeMapper();
-    var chromosome = mapper.MapToChromosome(plan, input);
-
-    var calculator = CreateFitnessCalculator();
-    var result = calculator.Evaluate(chromosome, input);
-
-    Assert(result.ConflictCount > 0, "Expected schedule order overlap conflict.");
-    Assert(result.ConstraintReport.ScheduleConflicts.Count > 0, "Expected ScheduleConflicts report to contain violation.");
 }
 
 static void TestEquipmentSubstitutionManualPlan()
@@ -602,8 +582,7 @@ static OptimizationInput CreateComprehensiveOptimizationInput()
         Settings = new OptimizationSettings
         {
             PopulationSize = 10,
-            GenerationCount = 2,
-            MaxScheduleShiftDays = 0
+            GenerationCount = 2
         }
     };
 }
@@ -830,8 +809,7 @@ static OptimizationInput CreateInput(
         Settings = new OptimizationSettings
         {
             PopulationSize = 20,
-            GenerationCount = 1,
-            MaxScheduleShiftDays = 0
+            GenerationCount = 1
         }
     };
 }
@@ -843,8 +821,7 @@ static FitnessCalculator CreateFitnessCalculator()
         new LandConstraintEvaluator(),
         new HumanConstraintEvaluator(),
         new EquipmentConstraintEvaluator(),
-        new MaintenanceConstraintEvaluator(),
-        new ScheduleConstraintEvaluator()
+        new MaintenanceConstraintEvaluator()
     });
 }
 

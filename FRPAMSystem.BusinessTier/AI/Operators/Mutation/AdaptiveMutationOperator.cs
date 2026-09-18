@@ -35,7 +35,7 @@ namespace FRPAMSystem.BusinessTier.AI.Operators.Mutation
                     continue;
                 }
 
-                var component = (MutationComponent)_random.Next(4);
+                var component = (MutationComponent)_random.Next(3);
                 _populationGenerator.MutateComponent(chromosome.Genes[i], input, component);
             }
         }

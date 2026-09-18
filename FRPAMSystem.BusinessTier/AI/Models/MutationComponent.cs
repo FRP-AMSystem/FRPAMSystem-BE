@@ -5,6 +5,5 @@ namespace FRPAMSystem.BusinessTier.AI.Models
         Land,
         Human,
         Equipment,
-        Schedule
     }
 }
