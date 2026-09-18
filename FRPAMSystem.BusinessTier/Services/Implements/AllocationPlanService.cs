@@ -777,13 +777,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 .AsNoTracking()
                 .ToListAsync();
 
-            var schedules = await _unitOfWork
-                .GetRepository<Schedule>()
-                .GetQueryable()
-                .Where(s => currentPlanId == null || s.AllocationPlanId != currentPlanId.Value)
-                .AsNoTracking()
-                .ToListAsync();
-
             var landAllocations = await _unitOfWork
                 .GetRepository<AllocationLandDetail>()
                 .GetQueryable()
@@ -824,7 +817,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 ExperimentEquipmentRequirements = experiment.ExperimentEquipmentRequirements.ToList(),
                 PhaseHumanRequirements = phaseHumanRequirements,
                 PhaseEquipmentRequirements = phaseEquipmentRequirements,
-                ExistingSchedules = schedules,
                 ExistingLandAllocations = landAllocations,
                 ExistingHumanAllocations = humanAllocations,
                 ExistingEquipmentAllocations = equipmentAllocations,

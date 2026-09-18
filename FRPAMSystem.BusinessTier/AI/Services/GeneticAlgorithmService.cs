@@ -143,7 +143,6 @@ namespace FRPAMSystem.BusinessTier.AI.Services
                     LandScore = Math.Round(chromosome.FitnessBreakdown.LandScore, 2),
                     HumanScore = Math.Round(chromosome.FitnessBreakdown.HumanScore, 2),
                     EquipmentScore = Math.Round(chromosome.FitnessBreakdown.EquipmentScore, 2),
-                    ScheduleScore = Math.Round(chromosome.FitnessBreakdown.ScheduleScore, 2),
                     PenaltyScore = Math.Round(chromosome.FitnessBreakdown.PenaltyScore, 2),
                     BonusScore = Math.Round(chromosome.FitnessBreakdown.BonusScore, 2),
                     FinalScore = Math.Round(chromosome.FitnessBreakdown.FinalScore, 2),
@@ -151,7 +150,6 @@ namespace FRPAMSystem.BusinessTier.AI.Services
                     Land = MapExplanationDTO(chromosome.FitnessBreakdown.Land),
                     Human = MapExplanationDTO(chromosome.FitnessBreakdown.Human),
                     Equipment = MapExplanationDTO(chromosome.FitnessBreakdown.Equipment),
-                    Schedule = MapExplanationDTO(chromosome.FitnessBreakdown.Schedule),
                     Penalties = chromosome.FitnessBreakdown.Penalties.Select(MapAdjustmentDTO).ToList(),
                     Bonuses = chromosome.FitnessBreakdown.Bonuses.Select(MapAdjustmentDTO).ToList()
                 },
@@ -162,7 +160,6 @@ namespace FRPAMSystem.BusinessTier.AI.Services
                     LandConflicts = chromosome.ConstraintReport.LandConflicts.Distinct().ToList(),
                     HumanConflicts = chromosome.ConstraintReport.HumanConflicts.Distinct().ToList(),
                     EquipmentConflicts = chromosome.ConstraintReport.EquipmentConflicts.Distinct().ToList(),
-                    ScheduleConflicts = chromosome.ConstraintReport.ScheduleConflicts.Distinct().ToList(),
                     MaintenanceConflicts = chromosome.ConstraintReport.MaintenanceConflicts.Distinct().ToList(),
                     SkillConflicts = chromosome.ConstraintReport.SkillConflicts.Distinct().ToList(),
                     RoleConflicts = chromosome.ConstraintReport.RoleConflicts.Distinct().ToList(),

@@ -15,8 +15,7 @@ namespace FRPAMSystem.NotificationTests.Services
                 new LandConstraintEvaluator(),
                 new HumanConstraintEvaluator(),
                 new EquipmentConstraintEvaluator(),
-                new MaintenanceConstraintEvaluator(),
-                new ScheduleConstraintEvaluator()
+                new MaintenanceConstraintEvaluator()
             });
         }
 
@@ -164,7 +163,6 @@ namespace FRPAMSystem.NotificationTests.Services
             Assert.NotEmpty(result.Breakdown.Land.Calculation);
             Assert.NotEmpty(result.Breakdown.Human.Calculation);
             Assert.NotEmpty(result.Breakdown.Equipment.Calculation);
-            Assert.NotEmpty(result.Breakdown.Schedule.Calculation);
         }
 
         [Fact]
@@ -552,7 +550,6 @@ namespace FRPAMSystem.NotificationTests.Services
 
             var result = calculator.Evaluate(chromosome, input);
             Assert.False(result.IsFeasible);
-            Assert.Contains(result.ConstraintReport.ScheduleConflicts, s => s.Contains("starts before phase 1 completes"));
         }
 
         [Fact]
@@ -788,7 +785,6 @@ namespace FRPAMSystem.NotificationTests.Services
                 Assert.NotEmpty(suggestion.FitnessBreakdown.Land.Calculation);
                 Assert.NotEmpty(suggestion.FitnessBreakdown.Human.Calculation);
                 Assert.NotEmpty(suggestion.FitnessBreakdown.Equipment.Calculation);
-                Assert.NotEmpty(suggestion.FitnessBreakdown.Schedule.Calculation);
             }
         }
     }

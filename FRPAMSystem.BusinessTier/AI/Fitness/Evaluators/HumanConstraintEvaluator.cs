@@ -78,10 +78,7 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness.Evaluators
 
                     if (input.ExistingHumanAllocations.Any(a =>
                             a.HumanResourceId == human.HumanResourceId &&
-                            FitnessEvaluationHelper.Overlaps(gene.StartDate, gene.EndDate, a.StartDate, a.EndDate)) ||
-                        input.ExistingSchedules.Any(s =>
-                            s.AssignedHumanResourceId == human.HumanResourceId &&
-                            FitnessEvaluationHelper.Overlaps(gene.StartDate, gene.EndDate, s.StartDate, s.EndDate)))
+                            FitnessEvaluationHelper.Overlaps(gene.StartDate, gene.EndDate, a.StartDate, a.EndDate)))
                     {
                         Add(result, "Human", ConstraintSeverity.Hard, $"Human resource {human.HumanResourceId} is double-booked.");
                         geneScore -= 35d;
@@ -90,7 +87,7 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness.Evaluators
                             Factor = "Staff External Overlap",
                             Points = -35d,
                             Type = "Deduction",
-                            Reason = $"Staff {human.User?.FullName ?? human.HumanResourceId.ToString()} overlaps with an existing schedule/allocation.",
+                            Reason = $"Staff {human.User?.FullName ?? human.HumanResourceId.ToString()} overlaps with an existing allocation.",
                             Calculation = "-35"
                         });
                     }

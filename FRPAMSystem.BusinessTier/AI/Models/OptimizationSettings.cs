@@ -20,7 +20,6 @@ namespace FRPAMSystem.BusinessTier.AI.Models
 
         public int TopSuggestionCount { get; set; } = 5;
 
-        public int MaxScheduleShiftDays { get; set; } = 7;
 
         public double LandWeight { get; set; } = 25d;
 
@@ -28,7 +27,6 @@ namespace FRPAMSystem.BusinessTier.AI.Models
 
         public double EquipmentWeight { get; set; } = 25d;
 
-        public double ScheduleWeight { get; set; } = 25d;
 
         public double PenaltyWeight { get; set; } = 1d;
 
@@ -49,11 +47,9 @@ namespace FRPAMSystem.BusinessTier.AI.Models
             EliteCount = Math.Clamp(EliteCount, 1, Math.Max(1, PopulationSize / 4));
             TournamentSize = Math.Clamp(TournamentSize, 2, Math.Max(2, PopulationSize));
             TopSuggestionCount = Math.Clamp(TopSuggestionCount, 1, 5);
-            MaxScheduleShiftDays = Math.Clamp(MaxScheduleShiftDays, 0, 90);
             LandWeight = Math.Clamp(LandWeight, 0d, 100d);
             HumanWeight = Math.Clamp(HumanWeight, 0d, 100d);
             EquipmentWeight = Math.Clamp(EquipmentWeight, 0d, 100d);
-            ScheduleWeight = Math.Clamp(ScheduleWeight, 0d, 100d);
             PenaltyWeight = Math.Clamp(PenaltyWeight, 0d, 10d);
             BonusWeight = Math.Clamp(BonusWeight, 0d, 10d);
             HardConstraintPenalty = Math.Clamp(HardConstraintPenalty, 1d, 100d);
@@ -73,11 +69,9 @@ namespace FRPAMSystem.BusinessTier.AI.Models
                 EliteCount = EliteCount,
                 TournamentSize = TournamentSize,
                 TopSuggestionCount = TopSuggestionCount,
-                MaxScheduleShiftDays = MaxScheduleShiftDays,
                 LandWeight = LandWeight,
                 HumanWeight = HumanWeight,
                 EquipmentWeight = EquipmentWeight,
-                ScheduleWeight = ScheduleWeight,
                 PenaltyWeight = PenaltyWeight,
                 BonusWeight = BonusWeight,
                 HardConstraintPenalty = HardConstraintPenalty,
