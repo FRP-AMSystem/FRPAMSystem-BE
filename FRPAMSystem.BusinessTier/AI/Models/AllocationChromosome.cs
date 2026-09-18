@@ -54,6 +54,7 @@ namespace FRPAMSystem.BusinessTier.AI.Models
                     LandScore = FitnessBreakdown.LandScore,
                     HumanScore = FitnessBreakdown.HumanScore,
                     EquipmentScore = FitnessBreakdown.EquipmentScore,
+                    MaintenanceScore = FitnessBreakdown.MaintenanceScore,
                     PenaltyScore = FitnessBreakdown.PenaltyScore,
                     BonusScore = FitnessBreakdown.BonusScore,
                     FinalScore = FitnessBreakdown.FinalScore,

@@ -126,7 +126,7 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness.Evaluators
                 }
                 phase.FinalScore = score;
                 phase.Calculation = phaseParts.Count == 0
-                    ? "No equipment requirements = 0.00"
+                    ? "No equipment requirements = 100.00"
                     : $"Average weighted equipment requirements = {score:F2}";
                 phaseScores.Add(score);
                 phases.Add(phase);

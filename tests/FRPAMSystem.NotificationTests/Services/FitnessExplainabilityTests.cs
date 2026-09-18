@@ -821,6 +821,92 @@ namespace FRPAMSystem.NotificationTests.Services
             }
         }
 
+        [Fact]
+        public void FitnessBreakdownClone_PreservesMaintenanceScore()
+        {
+            var chromosome = new AllocationChromosome
+            {
+                FitnessBreakdown = new FitnessBreakdown { MaintenanceScore = 73.5d }
+            };
+
+            var clone = chromosome.Clone();
+
+            Assert.Equal(73.5d, clone.FitnessBreakdown.MaintenanceScore);
+        }
+
+        [Fact]
+        public void EquipmentWithoutRequirements_ExplainsFullScore()
+        {
+            var input = CreateBaseInput();
+            input.PhaseEquipmentRequirements = Array.Empty<PhaseEquipmentRequirement>();
+            input.ExperimentEquipmentRequirements = Array.Empty<ExperimentEquipmentRequirement>();
+            var chromosome = new AllocationChromosome
+            {
+                Genes = new List<AllocationGene>
+                {
+                    new() { PhaseId = 1, StartDate = new DateTime(2026, 6, 1), EndDate = new DateTime(2026, 6, 5) }
+                }
+            };
+
+            var result = CreateFitnessCalculator().Evaluate(chromosome, input);
+
+            Assert.Equal(100d, result.EquipmentScore);
+            Assert.Contains("100.00", result.Breakdown.Equipment.Phases.Single().Calculation);
+        }
+
+        [Fact]
+        public void ComponentBonuses_AreShownAtPhaseLevel()
+        {
+            var input = CreateBaseInput();
+            input.HumanResources = new[]
+            {
+                input.HumanResources.Single(),
+                new HumanResourceProfile
+                {
+                    HumanResourceId = 21,
+                    Status = "Available",
+                    MaxWorkingHoursPerDay = 8d,
+                    User = new User { UserId = 21, FullName = "Dr. Bob", RoleId = 2 },
+                    HumanResourceSkills = new List<HumanResourceSkill>
+                    {
+                        new() { HumanResourceId = 21, SkillId = 5 }
+                    }
+                }
+            };
+            var chromosome = new AllocationChromosome
+            {
+                Genes = new List<AllocationGene>
+                {
+                    new()
+                    {
+                        PhaseId = 1,
+                        StartDate = new DateTime(2026, 6, 1),
+                        EndDate = new DateTime(2026, 6, 5),
+                        AssignedHumanResourceIds = new List<int> { 20, 21 },
+                        EquipmentAssignments = new List<EquipmentAssignmentGene>
+                        {
+                            new()
+                            {
+                                PhaseEquipmentRequirementId = 300,
+                                RequiredEquipmentTypeId = 6,
+                                AllocatedEquipmentTypeId = 6,
+                                EquipmentInstanceId = 30,
+                                EfficiencyRate = 1d,
+                                TimeMultiplier = 1d
+                            }
+                        }
+                    }
+                }
+            };
+
+            var result = CreateFitnessCalculator().Evaluate(chromosome, input);
+
+            Assert.Contains(result.Breakdown.Human.Phases.Single().Bonuses,
+                bonus => bonus.Factor == "Human Workload Balance");
+            Assert.Contains(result.Breakdown.Maintenance.Phases.Single().Bonuses,
+                bonus => bonus.Factor == "Equipment Maintenance Health");
+        }
+
         private sealed class ScheduleOnlyEvaluator : IConstraintEvaluator
         {
             public string Category => "Schedule";
