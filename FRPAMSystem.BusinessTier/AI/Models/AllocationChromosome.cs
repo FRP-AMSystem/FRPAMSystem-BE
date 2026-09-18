@@ -16,6 +16,7 @@ namespace FRPAMSystem.BusinessTier.AI.Models
 
         public double EquipmentScore { get; set; }
 
+        public double MaintenanceScore { get; set; }
 
         public int ConflictCount { get; set; }
 
@@ -44,6 +45,7 @@ namespace FRPAMSystem.BusinessTier.AI.Models
                 LandScore = LandScore,
                 HumanScore = HumanScore,
                 EquipmentScore = EquipmentScore,
+                MaintenanceScore = MaintenanceScore,
                 ConflictCount = ConflictCount,
                 HardViolationCount = HardViolationCount,
                 SoftViolationCount = SoftViolationCount,
@@ -59,11 +61,14 @@ namespace FRPAMSystem.BusinessTier.AI.Models
                     Land = FitnessBreakdown.Land.Clone(),
                     Human = FitnessBreakdown.Human.Clone(),
                     Equipment = FitnessBreakdown.Equipment.Clone(),
+                    Maintenance = FitnessBreakdown.Maintenance.Clone(),
                     Penalties = FitnessBreakdown.Penalties.Select(p => p.Clone()).ToList(),
                     Bonuses = FitnessBreakdown.Bonuses.Select(b => b.Clone()).ToList()
                 },
                 ConstraintReport = new ConstraintReport
                 {
+                    HardViolationCount = ConstraintReport.HardViolationCount,
+                    SoftViolationCount = ConstraintReport.SoftViolationCount,
                     LandConflicts = ConstraintReport.LandConflicts.ToList(),
                     HumanConflicts = ConstraintReport.HumanConflicts.ToList(),
                     EquipmentConflicts = ConstraintReport.EquipmentConflicts.ToList(),
