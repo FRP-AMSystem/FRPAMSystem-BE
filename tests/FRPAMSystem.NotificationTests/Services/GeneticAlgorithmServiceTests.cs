@@ -299,5 +299,125 @@ namespace FRPAMSystem.NotificationTests.Services
             Assert.True(suggestions[0].IsFeasible);
             Assert.Equal(0, suggestions[0].HardViolationCount);
         }
+
+        [Fact]
+        public void CreateFingerprint_WhenEquipmentAssignmentDetailsChange_ShouldChangeFingerprint()
+        {
+            var baseline = new AllocationChromosome
+            {
+                Genes = new List<AllocationGene>
+                {
+                    new AllocationGene
+                    {
+                        PhaseId = 1,
+                        LandId = 10,
+                        EquipmentAssignments = new List<EquipmentAssignmentGene>
+                        {
+                            new EquipmentAssignmentGene
+                            {
+                                RequiredEquipmentTypeId = 2,
+                                AllocatedEquipmentTypeId = 2,
+                                EquipmentInstanceId = 20,
+                                EfficiencyRate = 1d,
+                                TimeMultiplier = 1d
+                            }
+                        }
+                    }
+                }
+            };
+            var changed = baseline.Clone();
+            changed.Genes[0].EquipmentAssignments[0].IsSubstitute = true;
+            changed.Genes[0].EquipmentAssignments[0].EfficiencyRate = 0.75d;
+
+            var baselineFingerprint = GetFingerprint(baseline);
+            var changedFingerprint = GetFingerprint(changed);
+
+            Assert.NotEqual(baselineFingerprint, changedFingerprint);
+        }
+
+        [Fact]
+        public void GenerateSuggestions_WhenFallbackIsNeeded_ShouldMutateClonesInsteadOfSelectedReferences()
+        {
+            var input = new OptimizationInput
+            {
+                Experiment = new Experiment
+                {
+                    ExperimentId = 1,
+                    ExpectStartDate = new DateTime(2026, 9, 1),
+                    ExpectEndDate = new DateTime(2026, 9, 30)
+                },
+                ExperimentPhases = new List<ExperimentPhase>
+                {
+                    new ExperimentPhase
+                    {
+                        PhaseId = 1,
+                        PhaseOrder = 1,
+                        ExpectedStartDate = new DateTime(2026, 9, 1),
+                        ExpectedEndDate = new DateTime(2026, 9, 30)
+                    }
+                },
+                Settings = new OptimizationSettings
+                {
+                    PopulationSize = 2,
+                    GenerationCount = 1,
+                    EliteCount = 1,
+                    TopSuggestionCount = 2
+                }
+            };
+            var selected = new AllocationChromosome
+            {
+                Genes = new List<AllocationGene> { new AllocationGene { PhaseId = 1 } }
+            };
+            var mutated = new List<AllocationChromosome>();
+
+            var populationGenerator = new Mock<IPopulationGenerator>();
+            populationGenerator.Setup(g => g.Generate(input))
+                .Returns(new Population
+                {
+                    Chromosomes = new List<AllocationChromosome> { selected, selected.Clone() }
+                });
+
+            var selection = new Mock<ISelectionOperator>();
+            selection.Setup(s => s.Select(
+                    It.IsAny<IReadOnlyList<AllocationChromosome>>(),
+                    It.IsAny<OptimizationSettings>()))
+                .Returns(selected);
+
+            var crossover = new Mock<ICrossoverOperator>();
+            crossover.Setup(c => c.Crossover(
+                    It.IsAny<AllocationChromosome>(),
+                    It.IsAny<AllocationChromosome>(),
+                    It.IsAny<OptimizationSettings>()))
+                .Returns((selected, selected));
+
+            var mutation = new Mock<IMutationOperator>();
+            mutation.Setup(m => m.Mutate(
+                    It.IsAny<AllocationChromosome>(),
+                    input,
+                    It.IsAny<int>()))
+                .Callback<AllocationChromosome, OptimizationInput, int>((chromosome, _, _) => mutated.Add(chromosome));
+
+            var service = new GeneticAlgorithmService(
+                populationGenerator.Object,
+                new Mock<IFitnessCalculator>().Object,
+                selection.Object,
+                crossover.Object,
+                mutation.Object);
+
+            service.GenerateSuggestions(input);
+
+            Assert.NotEmpty(mutated);
+            Assert.DoesNotContain(mutated, chromosome => ReferenceEquals(chromosome, selected));
+            Assert.Equal(mutated.Count, mutated.Distinct(ReferenceEqualityComparer.Instance).Count());
+        }
+
+        private static string GetFingerprint(AllocationChromosome chromosome)
+        {
+            var method = typeof(GeneticAlgorithmService).GetMethod(
+                "CreateFingerprint",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+
+            return (string)method!.Invoke(null, new object[] { chromosome })!;
+        }
     }
 }
