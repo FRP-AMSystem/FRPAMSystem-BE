@@ -71,8 +71,10 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness.Evaluators
                     else
                     {
                         result.Bonus += 1d;
-                        result.BonusAdjustments.Add(Adjustment("Equipment Maintenance Health", 1d, "Bonus",
-                            $"Equipment {instance.AssetCode} has healthy maintenance margin ({remainingHours:F1}h remaining).", "+1"));
+                        var adjustment = Adjustment("Equipment Maintenance Health", 1d, "Bonus",
+                            $"Equipment {instance.AssetCode} has healthy maintenance margin ({remainingHours:F1}h remaining).", "+1");
+                        result.BonusAdjustments.Add(adjustment);
+                        phase.Bonuses.Add(adjustment.Clone());
                     }
 
                     phase.SubScores.Add(SubScore($"Equipment {instance.AssetCode}", score));

@@ -122,7 +122,7 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness.Evaluators
                 phases.Add(phase);
             }
 
-            ApplyWorkloadBalance(chromosome, result);
+            ApplyWorkloadBalance(chromosome, result, phases);
             result.Score = phaseScores.Count == 0 ? 0d : phaseScores.Average();
             result.Explanation = new ScoreExplanation
             {
@@ -143,15 +143,23 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness.Evaluators
         private static ScoreAdjustment Adjustment(string factor, double points, string type, string reason, string calculation) =>
             new() { Factor = factor, Points = points, Type = type, Reason = reason, Calculation = calculation };
 
-        private static void ApplyWorkloadBalance(AllocationChromosome chromosome, ConstraintEvaluationResult result)
+        private static void ApplyWorkloadBalance(
+            AllocationChromosome chromosome,
+            ConstraintEvaluationResult result,
+            IReadOnlyList<PhaseScoreExplanation> phases)
         {
             var counts = chromosome.Genes.SelectMany(g => g.AssignedHumanResourceIds)
                 .GroupBy(id => id).Select(g => g.Count()).ToList();
             if (counts.Count > 1 && counts.Max() - counts.Min() <= 1)
             {
                 result.Bonus += 1d;
-                result.BonusAdjustments.Add(Adjustment("Human Workload Balance", 1d, "Bonus",
-                    "Human workload is balanced across assigned staff.", "spread ≤ 1 → +1"));
+                var adjustment = Adjustment("Human Workload Balance", 1d, "Bonus",
+                    "Human workload is balanced across assigned staff.", "spread ≤ 1 → +1");
+                result.BonusAdjustments.Add(adjustment);
+                if (phases.Count > 0)
+                {
+                    phases[0].Bonuses.Add(adjustment.Clone());
+                }
                 result.Advantages.Add("Human workload is balanced across assigned staff.");
             }
             else if (counts.Count > 1)
