@@ -59,13 +59,25 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness.Evaluators
                             continue;
                         }
 
-                        var primary = instance.EquipmentTypeId == requirement.EquipmentTypeId &&
-                                      assignment.AllocatedEquipmentTypeId == requirement.EquipmentTypeId;
+                        var primary = !assignment.IsSubstitute &&
+                                      assignment.RequiredEquipmentTypeId == requirement.EquipmentTypeId &&
+                                      instance.EquipmentTypeId == requirement.EquipmentTypeId &&
+                                      assignment.AllocatedEquipmentTypeId == requirement.EquipmentTypeId &&
+                                      Math.Abs(assignment.EfficiencyRate - 1d) < 0.000001d &&
+                                      Math.Abs(assignment.TimeMultiplier - 1d) < 0.000001d;
                         var efficiency = FitnessEvaluationHelper.ClampScore(assignment.EfficiencyRate * 100d);
+                        var substitution = input.EquipmentSubstitutions.FirstOrDefault(s =>
+                            s.PrimaryEquipmentTypeId == requirement.EquipmentTypeId &&
+                            s.SubEquipmentTypeId == instance.EquipmentTypeId);
                         var validSubstitution = assignment.IsSubstitute &&
+                                                assignment.RequiredEquipmentTypeId == requirement.EquipmentTypeId &&
+                                                assignment.AllocatedEquipmentTypeId == instance.EquipmentTypeId &&
                                                 requirement.AllowSubstitute &&
+                                                substitution is not null &&
                                                 (!requirement.MinAcceptableEfficiency.HasValue ||
-                                                 assignment.EfficiencyRate >= requirement.MinAcceptableEfficiency.Value);
+                                                 assignment.EfficiencyRate >= requirement.MinAcceptableEfficiency.Value) &&
+                                                Math.Abs(assignment.EfficiencyRate - substitution!.EfficiencyRate) < 0.000001d &&
+                                                Math.Abs(assignment.TimeMultiplier - substitution.TimeMultiplier) < 0.000001d;
                         var typeScore = primary ? 100d : validSubstitution ? efficiency : 0d;
                         var substitutionScore = primary ? 100d : validSubstitution ? efficiency : 0d;
 
@@ -80,6 +92,8 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness.Evaluators
                         }
                         else if (validSubstitution)
                         {
+                            result.Disadvantages.Add(
+                                $"Equipment {instance.AssetCode} uses a valid substitute at {assignment.EfficiencyRate:P0} efficiency.");
                             phase.Adjustments.Add(Adjustment("Equipment Substitution", efficiency, "Substitution",
                                 $"RequiredEquipmentTypeId={requirement.EquipmentTypeId}, AllocatedEquipmentTypeId={assignment.AllocatedEquipmentTypeId}, " +
                                 $"EquipmentInstanceId={assignment.EquipmentInstanceId}, AssetCode={instance.AssetCode}, EfficiencyRate={assignment.EfficiencyRate:F2}, " +
@@ -160,7 +174,7 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness.Evaluators
                 "fair" => 75d,
                 "poor" => 40d,
                 "critical" => 0d,
-                _ => 75d
+                _ => 0d
             };
 
         private static ScoreAdjustment SubScore(string factor, double score, double weight) =>

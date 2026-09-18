@@ -37,6 +37,7 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
                         .Select(p => GenerateGene(p.PhaseId, input))
                         .ToList()
                 };
+                NormalizeLandAssignments(chromosome);
 
                 if (fingerprints.Add(CreateFingerprint(chromosome)))
                 {
@@ -45,6 +46,22 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
             }
 
             return population;
+        }
+
+        public static void NormalizeLandAssignments(AllocationChromosome chromosome)
+        {
+            var landId = chromosome.Genes
+                .Select(g => g.LandId)
+                .FirstOrDefault(id => id.HasValue);
+            if (!landId.HasValue)
+            {
+                return;
+            }
+
+            foreach (var gene in chromosome.Genes)
+            {
+                gene.LandId = landId;
+            }
         }
 
         public AllocationGene GenerateGene(int phaseId, OptimizationInput input)

@@ -22,6 +22,16 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness.Evaluators
                     : requirements.OrderByDescending(r => r.RequiredArea).FirstOrDefault();
                 var phase = new PhaseScoreExplanation { PhaseId = gene.PhaseId };
 
+                if (gene.LandId is null && requirement is null)
+                {
+                    phase.SubScores.AddRange(SubScores(100d, 100d, 100d, 100d));
+                    phase.FinalScore = 100d;
+                    phase.Calculation = $"Phase {gene.PhaseId}: no land requirement = 100.00";
+                    phaseScores.Add(100d);
+                    phases.Add(phase);
+                    continue;
+                }
+
                 if (gene.LandId is null || !lands.TryGetValue(gene.LandId.Value, out var land))
                 {
                     Add(result, ConstraintSeverity.Hard, $"Phase {gene.PhaseId} has no valid land allocation.");
@@ -115,7 +125,11 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness.Evaluators
                 Calculation = phases.Count == 0
                     ? "No land phases = 0.00"
                     : $"Average({string.Join(", ", phaseScores.Select(s => s.ToString("F2")))}) = {result.Score:F2}",
-                Adjustments = phases.SelectMany(p => p.Adjustments).ToList(),
+                Adjustments = phases
+                    .SelectMany(p => p.Adjustments)
+                    .GroupBy(a => (a.Factor, a.Reason, a.Calculation))
+                    .Select(g => g.First())
+                    .ToList(),
                 Phases = phases
             };
             if (result.Score >= 85d)

@@ -117,7 +117,7 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness.Evaluators
                 "fair" => 0.85d,
                 "poor" => 0.60d,
                 "critical" => 0.30d,
-                _ => 0.85d
+                _ => 0d
             };
 
         private static double GetMaintenanceCountFactor(int maintenanceCount) =>

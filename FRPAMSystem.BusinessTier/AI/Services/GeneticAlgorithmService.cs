@@ -70,6 +70,8 @@ namespace FRPAMSystem.BusinessTier.AI.Services
 
                     _mutationOperator.Mutate(firstChild, input, generation);
                     _mutationOperator.Mutate(secondChild, input, generation);
+                    NormalizeLandAssignments(firstChild);
+                    NormalizeLandAssignments(secondChild);
 
                     AddIfUnique(nextGeneration, fingerprints, firstChild, input.Settings.PopulationSize);
                     AddIfUnique(nextGeneration, fingerprints, secondChild, input.Settings.PopulationSize);
@@ -87,6 +89,7 @@ namespace FRPAMSystem.BusinessTier.AI.Services
                     var candidate = parent.Clone();
 
                     _mutationOperator.Mutate(candidate, input, generation);
+                    NormalizeLandAssignments(candidate);
 
                     AddIfUnique(
                         nextGeneration,
@@ -316,6 +319,20 @@ namespace FRPAMSystem.BusinessTier.AI.Services
         private static string CreateFingerprint(AllocationChromosome chromosome)
         {
             return AllocationChromosomeFingerprint.Create(chromosome);
+        }
+
+        private static void NormalizeLandAssignments(AllocationChromosome chromosome)
+        {
+            var landId = chromosome.Genes.Select(g => g.LandId).FirstOrDefault(id => id.HasValue);
+            if (!landId.HasValue)
+            {
+                return;
+            }
+
+            foreach (var gene in chromosome.Genes)
+            {
+                gene.LandId = landId;
+            }
         }
     }
 }
