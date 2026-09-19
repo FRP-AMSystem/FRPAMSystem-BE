@@ -226,7 +226,8 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                     include: query => query
                         .Include(d => d.AllocationPlan)
                             .ThenInclude(p => p.Experiment)
-                        .Include(d => d.EquipmentInstance),
+                        .Include(d => d.EquipmentInstance)
+                        .Include(d => d.AllocatedEquipmentType),
                     asNoTracking: false
                 );
 
@@ -239,6 +240,13 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             {
                 throw new Exception(
                     "Equipment must be in Reserved or Allocated status before handover.");
+            }
+
+            if (detail.AllocatedEquipmentType?.TrackingType == EquipmentTrackingType.Individual.ToString() &&
+                !detail.EquipmentInstanceId.HasValue)
+            {
+                throw new Exception(
+                    "Individual-tracked equipment must have a specific equipment instance assigned before handover.");
             }
 
             detail.Status = AllocationDetailStatus.InUse.ToString();
