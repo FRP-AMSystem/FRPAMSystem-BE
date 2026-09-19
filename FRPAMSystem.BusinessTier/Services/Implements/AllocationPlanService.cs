@@ -412,6 +412,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 .FirstOrDefaultAsync(
                     predicate: p => p.AllocationPlanId == id,
                     include: query => query
+                        .Include(p => p.Experiment)
                         .Include(p => p.AllocationLandDetails)
                         .Include(p => p.AllocationHumanDetails)
                         .Include(p => p.AllocationEquipmentDetails)
@@ -549,6 +550,13 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                         _unitOfWork.GetRepository<AllocationEquipmentDetail>().Update(eqDetail);
                     }
                 }
+            }
+
+            if (allocationPlan.Experiment != null && allocationPlan.Experiment.Status == ExperimentStatus.Planning.ToString())
+            {
+                allocationPlan.Experiment.Status = ExperimentStatus.Ready.ToString();
+                allocationPlan.Experiment.UpdatedAt = _clock.Now;
+                _unitOfWork.GetRepository<Experiment>().Update(allocationPlan.Experiment);
             }
 
             await _unitOfWork.CommitAsync();
