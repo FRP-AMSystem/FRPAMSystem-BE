@@ -599,8 +599,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             var status = EnumHelper.ParseEnum<HumanResourceStatus>(
                 humanResource.Status);
 
-            if (status != HumanResourceStatus.Available &&
-                status != HumanResourceStatus.Busy)
+            if (status != HumanResourceStatus.Available)
             {
                 throw new Exception("Human resource is not available for allocation.");
             }
