@@ -5,7 +5,6 @@ namespace FRPAMSystem.BusinessTier.Enums
         Available,
         Reserved,
         InUse,
-        Maintenance,
         Unavailable
     }
 }

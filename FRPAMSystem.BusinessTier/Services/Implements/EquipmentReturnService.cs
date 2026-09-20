@@ -1,6 +1,7 @@
 using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.Enums;
 using FRPAMSystem.BusinessTier.Payload.EquipmentReturn;
+using FRPAMSystem.BusinessTier.Payload.Notification;
 using FRPAMSystem.BusinessTier.Services.Interface;
 using FRPAMSystem.DataTier.Abstractions;
 using FRPAMSystem.DataTier.Models;
@@ -15,15 +16,18 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
         private readonly IUnitOfWork _unitOfWork;
         private readonly IAllocationEquipmentDetailService _allocationEquipmentDetailService;
         private readonly IClock _clock;
+        private readonly INotificationService? _notificationService;
 
         public EquipmentReturnService(
             IUnitOfWork unitOfWork,
             IAllocationEquipmentDetailService allocationEquipmentDetailService,
-            IClock clock)
+            IClock clock,
+            INotificationService? notificationService = null)
         {
             _unitOfWork = unitOfWork;
             _allocationEquipmentDetailService = allocationEquipmentDetailService;
             _clock = clock;
+            _notificationService = notificationService;
         }
 
         public async Task<IPaginate<EquipmentReturnResponse>> ViewAllAsync(
@@ -95,7 +99,9 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 .GetRepository<AllocationEquipmentDetail>()
                 .FirstOrDefaultAsync(
                     predicate: d => d.AllocationEquipmentDetailId == allocationEquipmentDetailId,
-                    include: query => query.Include(d => d.EquipmentInstance),
+                    include: query => query
+                        .Include(d => d.AllocationPlan)
+                        .Include(d => d.EquipmentInstance),
                     asNoTracking: false
                 );
 
@@ -109,15 +115,166 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 throw new Exception("Equipment must be in InUse status before return.");
             }
 
-            var equipmentReturn = await CreateConfirmedReturnInternalAsync(
-                detail,
-                returnedBy: userId,
-                receivedBy: userId,
-                conditionAfter: request.ConditionAfter,
-                isDamaged: request.IsDamaged,
-                damageDescription: request.DamageDescription,
-                note: request.Note,
-                completeAllocation: true);
+            var existingPending = await _unitOfWork
+                .GetRepository<EquipmentReturn>()
+                .FirstOrDefaultAsync(
+                    predicate: r => r.AllocationEquipmentDetailId == allocationEquipmentDetailId &&
+                                    r.Status == EquipmentReturnStatus.Pending.ToString(),
+                    asNoTracking: false
+                );
+
+            if (existingPending != null)
+            {
+                throw new Exception("A return request is already pending for this equipment.");
+            }
+
+            var defaultReceiverId = detail.AllocationPlan?.ApproveBy ?? detail.AllocationPlan?.CreatedBy ?? userId;
+
+            var equipmentReturn = new EquipmentReturn
+            {
+                AllocationEquipmentDetailId = detail.AllocationEquipmentDetailId,
+                EquipmentInstanceId = detail.EquipmentInstanceId,
+                ReturnedBy = userId,
+                ReceivedBy = defaultReceiverId,
+                ReturnDate = _clock.Now,
+                Quantity = detail.Quantity,
+                ConditionAfter = request.ConditionAfter.Trim(),
+                IsDamaged = request.IsDamaged,
+                DamageDescription = request.DamageDescription,
+                Note = request.Note,
+                Status = EquipmentReturnStatus.Pending.ToString(),
+                ConfirmedAt = null
+            };
+
+            await _unitOfWork.GetRepository<EquipmentReturn>().InsertAsync(equipmentReturn);
+
+            if (_notificationService != null)
+            {
+                await _notificationService.SendAsync(new SendNotificationRequest
+                {
+                    UserId = defaultReceiverId,
+                    Title = "Yêu cầu trả thiết bị mới",
+                    Message = $"Researcher đã gửi yêu cầu trả thiết bị (Mã trả: #{equipmentReturn.ReturnId}). Tình trạng: {equipmentReturn.ConditionAfter}.",
+                    NotificationType = NotificationTypes.EquipmentReturnPending,
+                    ReferenceType = NotificationReferenceTypes.EquipmentReturn,
+                    ReferenceId = equipmentReturn.ReturnId
+                });
+            }
+
+            await _unitOfWork.CommitAsync();
+
+            return MapToResponse(equipmentReturn);
+        }
+
+        public async Task<EquipmentReturnResponse?> ConfirmAsync(int returnId, int managerUserId)
+        {
+            var equipmentReturn = await _unitOfWork
+                .GetRepository<EquipmentReturn>()
+                .FirstOrDefaultAsync(
+                    predicate: r => r.ReturnId == returnId,
+                    include: query => query
+                        .Include(r => r.AllocationEquipmentDetail)
+                            .ThenInclude(d => d.EquipmentInstance),
+                    asNoTracking: false
+                );
+
+            if (equipmentReturn == null)
+            {
+                return null;
+            }
+
+            if (equipmentReturn.Status != EquipmentReturnStatus.Pending.ToString())
+            {
+                throw new Exception("Only pending return requests can be confirmed.");
+            }
+
+            var now = _clock.Now;
+            equipmentReturn.Status = EquipmentReturnStatus.Confirmed.ToString();
+            equipmentReturn.ReceivedBy = managerUserId;
+            equipmentReturn.ConfirmedAt = now;
+
+            _unitOfWork.GetRepository<EquipmentReturn>().Update(equipmentReturn);
+
+            var detail = equipmentReturn.AllocationEquipmentDetail;
+            if (detail != null)
+            {
+                detail.Status = AllocationDetailStatus.Completed.ToString();
+
+                if (detail.EquipmentInstanceId.HasValue && detail.EquipmentInstance != null)
+                {
+                    detail.EquipmentInstance.Status = equipmentReturn.IsDamaged
+                        ? EquipmentInstanceStatus.Damaged.ToString()
+                        : EquipmentInstanceStatus.Available.ToString();
+
+                    _unitOfWork.GetRepository<EquipmentInstance>().Update(detail.EquipmentInstance);
+                }
+
+                _unitOfWork.GetRepository<AllocationEquipmentDetail>().Update(detail);
+            }
+
+            if (_notificationService != null)
+            {
+                await _notificationService.SendAsync(new SendNotificationRequest
+                {
+                    UserId = equipmentReturn.ReturnedBy,
+                    Title = "Xác nhận tiếp nhận trả thiết bị",
+                    Message = $"Quản lý đã xác nhận tiếp nhận thiết bị được hoàn trả (Mã trả: #{equipmentReturn.ReturnId}).",
+                    NotificationType = NotificationTypes.EquipmentReturnConfirmed,
+                    ReferenceType = NotificationReferenceTypes.EquipmentReturn,
+                    ReferenceId = equipmentReturn.ReturnId
+                });
+            }
+
+            await _unitOfWork.CommitAsync();
+
+            return MapToResponse(equipmentReturn);
+        }
+
+        public async Task<EquipmentReturnResponse?> RejectAsync(int returnId, int managerUserId, RejectReturnRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Reason))
+            {
+                throw new Exception("Rejection reason is required.");
+            }
+
+            var equipmentReturn = await _unitOfWork
+                .GetRepository<EquipmentReturn>()
+                .FirstOrDefaultAsync(
+                    predicate: r => r.ReturnId == returnId,
+                    asNoTracking: false
+                );
+
+            if (equipmentReturn == null)
+            {
+                return null;
+            }
+
+            if (equipmentReturn.Status != EquipmentReturnStatus.Pending.ToString())
+            {
+                throw new Exception("Only pending return requests can be rejected.");
+            }
+
+            equipmentReturn.Status = EquipmentReturnStatus.Rejected.ToString();
+            equipmentReturn.ReceivedBy = managerUserId;
+            equipmentReturn.Note = string.IsNullOrWhiteSpace(equipmentReturn.Note)
+                ? $"Rejected: {request.Reason}"
+                : $"{equipmentReturn.Note} | Rejected: {request.Reason}";
+            equipmentReturn.ConfirmedAt = _clock.Now;
+
+            _unitOfWork.GetRepository<EquipmentReturn>().Update(equipmentReturn);
+
+            if (_notificationService != null)
+            {
+                await _notificationService.SendAsync(new SendNotificationRequest
+                {
+                    UserId = equipmentReturn.ReturnedBy,
+                    Title = "Yêu cầu trả thiết bị bị từ chối",
+                    Message = $"Quản lý đã từ chối yêu cầu trả thiết bị (Mã trả: #{equipmentReturn.ReturnId}). Lý do: {request.Reason}",
+                    NotificationType = NotificationTypes.EquipmentReturnRejected,
+                    ReferenceType = NotificationReferenceTypes.EquipmentReturn,
+                    ReferenceId = equipmentReturn.ReturnId
+                });
+            }
 
             await _unitOfWork.CommitAsync();
 
@@ -127,6 +284,10 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
         public async Task<EquipmentReturnResponse> CreateAsync(EquipmentReturnRequest request)
         {
             await ValidateRequestAsync(request);
+
+            var status = string.IsNullOrWhiteSpace(request.Status)
+                ? EquipmentReturnStatus.Pending.ToString()
+                : request.Status.Trim();
 
             var equipmentReturn = new EquipmentReturn
             {
@@ -140,13 +301,36 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 IsDamaged = request.IsDamaged,
                 DamageDescription = request.DamageDescription,
                 Note = request.Note,
-                Status = string.IsNullOrWhiteSpace(request.Status)
-                    ? EquipmentReturnStatus.Pending.ToString()
-                    : request.Status.Trim(),
+                Status = status,
                 ConfirmedAt = request.ConfirmedAt
             };
 
             await _unitOfWork.GetRepository<EquipmentReturn>().InsertAsync(equipmentReturn);
+
+            if (status == EquipmentReturnStatus.Confirmed.ToString())
+            {
+                var detail = await _unitOfWork
+                    .GetRepository<AllocationEquipmentDetail>()
+                    .FirstOrDefaultAsync(
+                        predicate: d => d.AllocationEquipmentDetailId == request.AllocationEquipmentDetailId,
+                        include: query => query.Include(d => d.EquipmentInstance),
+                        asNoTracking: false
+                    );
+
+                if (detail != null)
+                {
+                    detail.Status = AllocationDetailStatus.Completed.ToString();
+                    if (detail.EquipmentInstance != null)
+                    {
+                        detail.EquipmentInstance.Status = request.IsDamaged
+                            ? EquipmentInstanceStatus.Damaged.ToString()
+                            : EquipmentInstanceStatus.Available.ToString();
+                        _unitOfWork.GetRepository<EquipmentInstance>().Update(detail.EquipmentInstance);
+                    }
+                    _unitOfWork.GetRepository<AllocationEquipmentDetail>().Update(detail);
+                }
+            }
+
             await _unitOfWork.CommitAsync();
 
             return MapToResponse(equipmentReturn);
@@ -170,6 +354,17 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 return null;
             }
 
+            if (equipmentReturn.Status == EquipmentReturnStatus.Confirmed.ToString() ||
+                equipmentReturn.Status == EquipmentReturnStatus.Rejected.ToString())
+            {
+                throw new Exception("Cannot modify an equipment return that has already been confirmed or rejected.");
+            }
+
+            var previousStatus = equipmentReturn.Status;
+            var targetStatus = string.IsNullOrWhiteSpace(request.Status)
+                ? equipmentReturn.Status
+                : request.Status.Trim();
+
             equipmentReturn.AllocationEquipmentDetailId = request.AllocationEquipmentDetailId;
             equipmentReturn.EquipmentInstanceId = request.EquipmentInstanceId;
             equipmentReturn.ReturnedBy = request.ReturnedBy;
@@ -180,12 +375,36 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             equipmentReturn.IsDamaged = request.IsDamaged;
             equipmentReturn.DamageDescription = request.DamageDescription;
             equipmentReturn.Note = request.Note;
-            equipmentReturn.Status = string.IsNullOrWhiteSpace(request.Status)
-                ? equipmentReturn.Status
-                : request.Status.Trim();
+            equipmentReturn.Status = targetStatus;
             equipmentReturn.ConfirmedAt = request.ConfirmedAt;
 
             _unitOfWork.GetRepository<EquipmentReturn>().Update(equipmentReturn);
+
+            if (targetStatus == EquipmentReturnStatus.Confirmed.ToString() &&
+                previousStatus != EquipmentReturnStatus.Confirmed.ToString())
+            {
+                var detail = await _unitOfWork
+                    .GetRepository<AllocationEquipmentDetail>()
+                    .FirstOrDefaultAsync(
+                        predicate: d => d.AllocationEquipmentDetailId == request.AllocationEquipmentDetailId,
+                        include: query => query.Include(d => d.EquipmentInstance),
+                        asNoTracking: false
+                    );
+
+                if (detail != null)
+                {
+                    detail.Status = AllocationDetailStatus.Completed.ToString();
+                    if (detail.EquipmentInstance != null)
+                    {
+                        detail.EquipmentInstance.Status = request.IsDamaged
+                            ? EquipmentInstanceStatus.Damaged.ToString()
+                            : EquipmentInstanceStatus.Available.ToString();
+                        _unitOfWork.GetRepository<EquipmentInstance>().Update(detail.EquipmentInstance);
+                    }
+                    _unitOfWork.GetRepository<AllocationEquipmentDetail>().Update(detail);
+                }
+            }
+
             await _unitOfWork.CommitAsync();
 
             return MapToResponse(equipmentReturn);
@@ -203,6 +422,11 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             if (equipmentReturn == null)
             {
                 return false;
+            }
+
+            if (equipmentReturn.Status == EquipmentReturnStatus.Confirmed.ToString())
+            {
+                throw new Exception("Cannot delete a confirmed equipment return as it is part of the transaction audit history.");
             }
 
             _unitOfWork.GetRepository<EquipmentReturn>().Delete(equipmentReturn);
@@ -310,7 +534,9 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
 
             if (detail.EquipmentInstanceId.HasValue && detail.EquipmentInstance != null)
             {
-                detail.EquipmentInstance.Status = EquipmentInstanceStatus.Available.ToString();
+                detail.EquipmentInstance.Status = isDamaged
+                    ? EquipmentInstanceStatus.Damaged.ToString()
+                    : EquipmentInstanceStatus.Available.ToString();
                 _unitOfWork.GetRepository<EquipmentInstance>().Update(detail.EquipmentInstance);
             }
 

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -9,7 +9,7 @@ namespace FRPAMSystem.BusinessTier.Enums
     public enum HumanResourceStatus
     {
         Available,
-        Busy,
+        OnLeave,
         Inactive
     }
 }

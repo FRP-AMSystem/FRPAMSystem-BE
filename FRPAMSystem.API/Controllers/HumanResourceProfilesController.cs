@@ -147,5 +147,74 @@ namespace FRPAMSystem_BE.Controllers
                 data = result
             });
         }
+
+        [HttpPost("{id:int}/activate")]
+        [Authorize(Roles = "Admin,Manager")]
+        public async Task<IActionResult> ActivateHumanResourceProfile(int id)
+        {
+            var result = await _humanResourceProfileService.ActivateHumanResourceProfileAsync(id);
+
+            if (result == null)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "Human resource profile not found"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "Activate human resource profile successfully",
+                data = result
+            });
+        }
+
+        [HttpPost("{id:int}/deactivate")]
+        [Authorize(Roles = "Admin,Manager")]
+        public async Task<IActionResult> DeactivateHumanResourceProfile(int id)
+        {
+            var result = await _humanResourceProfileService.DeactivateHumanResourceProfileAsync(id);
+
+            if (result == null)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "Human resource profile not found"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "Deactivate human resource profile successfully",
+                data = result
+            });
+        }
+
+        [HttpPost("{id:int}/set-leave")]
+        [Authorize(Roles = "Admin,Manager")]
+        public async Task<IActionResult> SetLeaveHumanResourceProfile(int id)
+        {
+            var result = await _humanResourceProfileService.SetLeaveHumanResourceProfileAsync(id);
+
+            if (result == null)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "Human resource profile not found"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "Set human resource profile on leave successfully",
+                data = result
+            });
+        }
     }
 }

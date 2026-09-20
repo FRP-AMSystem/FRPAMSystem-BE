@@ -162,6 +162,15 @@ namespace FRPAMSystem.BusinessTier.AI.Mappers
                 chromosome.Genes.Add(gene);
             }
 
+            var landId = chromosome.Genes.Select(g => g.LandId).FirstOrDefault(id => id.HasValue);
+            if (landId.HasValue)
+            {
+                foreach (var gene in chromosome.Genes)
+                {
+                    gene.LandId = landId;
+                }
+            }
+
             return chromosome;
         }
     }
