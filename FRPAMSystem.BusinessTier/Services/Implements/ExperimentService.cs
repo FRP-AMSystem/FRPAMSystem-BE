@@ -17,15 +17,18 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
         private readonly IUnitOfWork _unitOfWork;
         private readonly IDomainEventDispatcher _domainEventDispatcher;
         private readonly IClock _clock;
+        private readonly ILandResourceService? _landResourceService;
 
         public ExperimentService(
             IUnitOfWork unitOfWork,
             IDomainEventDispatcher domainEventDispatcher,
-            IClock clock)
+            IClock clock,
+            ILandResourceService? landResourceService = null)
         {
             _unitOfWork = unitOfWork;
             _domainEventDispatcher = domainEventDispatcher;
             _clock = clock;
+            _landResourceService = landResourceService;
         }
 
         public async Task<IPaginate<ExperimentResponse>> ViewAllExperimentsAsync(
@@ -274,6 +277,8 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             _unitOfWork.GetRepository<Experiment>().Update(experiment);
             await _unitOfWork.CommitAsync();
 
+            await HandleLandStatusOnExperimentStatusChangeAsync(id, ExperimentStatus.Running);
+
             return await GetExperimentByIdAsync(id);
         }
 
@@ -320,6 +325,8 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             _unitOfWork.GetRepository<Experiment>().Update(experiment);
             await _unitOfWork.CommitAsync();
 
+            await HandleLandStatusOnExperimentStatusChangeAsync(id, ExperimentStatus.Completed);
+
             return await GetExperimentByIdAsync(id);
         }
 
@@ -361,6 +368,8 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
 
             _unitOfWork.GetRepository<Experiment>().Update(experiment);
             await _unitOfWork.CommitAsync();
+
+            await HandleLandStatusOnExperimentStatusChangeAsync(id, ExperimentStatus.Cancelled);
 
             return await GetExperimentByIdAsync(id);
         }
@@ -450,7 +459,100 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             _unitOfWork.GetRepository<Experiment>().Update(experiment);
             await _unitOfWork.CommitAsync();
 
+            await HandleLandStatusOnExperimentStatusChangeAsync(id, targetStatus);
+
             return await GetExperimentByIdAsync(id);
+        }
+
+        private async Task HandleLandStatusOnExperimentStatusChangeAsync(int experimentId, ExperimentStatus targetStatus)
+        {
+            var landDetailRepo = _unitOfWork.GetRepository<AllocationLandDetail>();
+            if (landDetailRepo == null)
+            {
+                return;
+            }
+
+            if (targetStatus == ExperimentStatus.Running)
+            {
+                var landDetails = await landDetailRepo
+                    .GetListAsync(
+                        predicate: d => d.AllocationPlan.ExperimentId == experimentId &&
+                                        d.AllocationPlan.ApproveStatus == AllocationPlanStatus.Approved.ToString() &&
+                                        d.Status == AllocationDetailStatus.Allocated.ToString(),
+                        asNoTracking: false
+                    );
+
+                foreach (var detail in landDetails)
+                {
+                    detail.Status = AllocationDetailStatus.InUse.ToString();
+                    detail.UpdatedAt = _clock.Now;
+                    _unitOfWork.GetRepository<AllocationLandDetail>().Update(detail);
+                }
+
+                if (landDetails.Count > 0)
+                {
+                    await _unitOfWork.CommitAsync();
+                    if (_landResourceService != null)
+                    {
+                        var landIds = landDetails.Select(d => d.LandId).Distinct();
+                        await _landResourceService.SyncLandStatusesAsync(landIds);
+                    }
+                }
+            }
+            else if (targetStatus == ExperimentStatus.Completed)
+            {
+                var landDetails = await landDetailRepo
+                    .GetListAsync(
+                        predicate: d => d.AllocationPlan.ExperimentId == experimentId &&
+                                        (d.Status == AllocationDetailStatus.InUse.ToString() ||
+                                         d.Status == AllocationDetailStatus.Allocated.ToString()),
+                        asNoTracking: false
+                    );
+
+                foreach (var detail in landDetails)
+                {
+                    detail.Status = AllocationDetailStatus.Completed.ToString();
+                    detail.UpdatedAt = _clock.Now;
+                    landDetailRepo.Update(detail);
+                }
+
+                if (landDetails.Count > 0)
+                {
+                    await _unitOfWork.CommitAsync();
+                    if (_landResourceService != null)
+                    {
+                        var landIds = landDetails.Select(d => d.LandId).Distinct();
+                        await _landResourceService.SyncLandStatusesAsync(landIds);
+                    }
+                }
+            }
+            else if (targetStatus == ExperimentStatus.Cancelled)
+            {
+                var landDetails = await landDetailRepo
+                    .GetListAsync(
+                        predicate: d => d.AllocationPlan.ExperimentId == experimentId &&
+                                        d.Status != AllocationDetailStatus.Completed.ToString() &&
+                                        d.Status != AllocationDetailStatus.Cancelled.ToString(),
+                        asNoTracking: false
+                    );
+
+                foreach (var detail in landDetails)
+                {
+                    detail.Status = AllocationDetailStatus.Cancelled.ToString();
+                    detail.UpdatedAt = _clock.Now;
+                    landDetailRepo.Update(detail);
+                }
+
+                if (landDetails.Count > 0)
+                {
+                    await _unitOfWork.CommitAsync();
+                    if (_landResourceService != null)
+                    {
+                        var landIds = landDetails.Select(d => d.LandId).Distinct();
+                        await _landResourceService.SyncLandStatusesAsync(landIds);
+                    }
+                }
+            }
         }
 
         private async Task ValidateRequestAsync(ExperimentRequest request, int? excludeId = null)

@@ -98,6 +98,41 @@ namespace FRPAMSystem.NotificationTests.Services
             _unitOfWorkMock.Verify(u => u.CommitAsync(), Times.Once);
         }
 
+        [Fact]
+        public async Task CreateAllocationLandDetailAsync_WhenLandIsUnavailable_ShouldThrowException()
+        {
+            // Arrange
+            var request = new AllocationLandDetailRequest
+            {
+                AllocationPlanId = 1,
+                LandId = 10,
+                ExpLandReqId = 5,
+                StartDate = new DateTime(2026, 9, 1),
+                EndDate = new DateTime(2026, 9, 30),
+                Status = AllocationDetailStatus.Reserved
+            };
+
+            _planRepoMock.Setup(r => r.FirstOrDefaultAsync(
+                    It.IsAny<Expression<Func<AllocationPlan, bool>>>(),
+                    It.IsAny<Func<IQueryable<AllocationPlan>, IOrderedQueryable<AllocationPlan>>>(),
+                    It.IsAny<Func<IQueryable<AllocationPlan>, IIncludableQueryable<AllocationPlan, object>>>(),
+                    It.IsAny<bool>()))
+                .ReturnsAsync(new AllocationPlan { AllocationPlanId = 1, ExperimentId = 2, ApproveStatus = AllocationPlanStatus.Draft.ToString() });
+
+            _landRepoMock.Setup(r => r.FirstOrDefaultAsync(
+                    It.IsAny<Expression<Func<LandResource, bool>>>(),
+                    It.IsAny<Func<IQueryable<LandResource>, IOrderedQueryable<LandResource>>>(),
+                    It.IsAny<Func<IQueryable<LandResource>, IIncludableQueryable<LandResource, object>>>(),
+                    It.IsAny<bool>()))
+                .ReturnsAsync(new LandResource { LandId = 10, LandCode = "PLOT-A1", SoilType = "Loam", AreaSize = 50.0m, Status = LandResourceStatus.Unavailable.ToString() });
+
+            var service = new AllocationLandDetailService(_unitOfWorkMock.Object);
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<Exception>(() => service.CreateAllocationLandDetailAsync(request));
+            Assert.Contains("unavailable", ex.Message, StringComparison.OrdinalIgnoreCase);
+        }
+
         // UT148-TC38
         // Abnormal
         [Fact]
