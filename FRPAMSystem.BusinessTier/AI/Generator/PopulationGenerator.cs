@@ -1,3 +1,4 @@
+using FRPAMSystem.BusinessTier.AI.Fitness.Evaluators;
 using FRPAMSystem.BusinessTier.AI.Models;
 using FRPAMSystem.DataTier.Models;
 
@@ -149,7 +150,7 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
             }
 
             var candidates = input.LandResources
-                .Where(l => IsAvailableStatus(l.Status))
+                .Where(l => FitnessEvaluationHelper.IsLandAvailableForOptimization(l.Status))
                 .Select(l => new
                 {
                     Land = l,

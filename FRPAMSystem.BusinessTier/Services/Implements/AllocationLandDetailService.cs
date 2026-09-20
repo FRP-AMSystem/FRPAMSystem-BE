@@ -17,10 +17,14 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
     public class AllocationLandDetailService : IAllocationLandDetailService
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly ILandResourceService? _landResourceService;
 
-        public AllocationLandDetailService(IUnitOfWork unitOfWork)
+        public AllocationLandDetailService(
+            IUnitOfWork unitOfWork,
+            ILandResourceService? landResourceService = null)
         {
             _unitOfWork = unitOfWork;
+            _landResourceService = landResourceService;
         }
 
         public async Task<IPaginate<AllocationLandDetailResponse>> ViewAllAllocationLandDetailsAsync(
@@ -124,6 +128,11 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 throw new Exception("Land resource does not exist.");
             }
 
+            if (string.Equals(land.Status, LandResourceStatus.Unavailable.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                throw new Exception($"Land resource '{land.LandCode}' is unavailable and cannot be allocated.");
+            }
+
             var landRequirement = await _unitOfWork
                 .GetRepository<ExperimentLandRequirement>()
                 .FirstOrDefaultAsync(
@@ -158,6 +167,12 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 .InsertAsync(detail);
 
             await _unitOfWork.CommitAsync();
+
+            if (_landResourceService != null &&
+                string.Equals(allocationPlan.ApproveStatus, AllocationPlanStatus.Approved.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                await _landResourceService.SyncLandStatusAsync(land.LandId);
+            }
 
             var created = await _unitOfWork
                 .GetRepository<AllocationLandDetail>()
@@ -218,6 +233,11 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 throw new Exception("Land resource does not exist.");
             }
 
+            if (string.Equals(land.Status, LandResourceStatus.Unavailable.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                throw new Exception($"Land resource '{land.LandCode}' is unavailable and cannot be allocated.");
+            }
+
             var landRequirement = await _unitOfWork
                 .GetRepository<ExperimentLandRequirement>()
                 .FirstOrDefaultAsync(
@@ -249,6 +269,12 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 .Update(detail);
 
             await _unitOfWork.CommitAsync();
+
+            if (_landResourceService != null &&
+                string.Equals(allocationPlan.ApproveStatus, AllocationPlanStatus.Approved.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                await _landResourceService.SyncLandStatusAsync(land.LandId);
+            }
 
             var updated = await _unitOfWork
                 .GetRepository<AllocationLandDetail>()
@@ -291,10 +317,19 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 throw new Exception("In-use or completed allocation detail cannot be deleted.");
             }
 
+            var landId = detail.LandId;
+            var planStatus = detail.AllocationPlan?.ApproveStatus;
+
             _unitOfWork.GetRepository<AllocationLandDetail>()
                 .Delete(detail);
 
             await _unitOfWork.CommitAsync();
+
+            if (_landResourceService != null &&
+                string.Equals(planStatus, AllocationPlanStatus.Approved.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                await _landResourceService.SyncLandStatusAsync(landId);
+            }
 
             return true;
         }

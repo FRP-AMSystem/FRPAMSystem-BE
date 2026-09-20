@@ -51,7 +51,7 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness.Evaluators
                     : requirement.RequiredArea <= 0m
                         ? 100d
                         : FitnessEvaluationHelper.ClampScore((double)(land.AreaSize / requirement.RequiredArea * 100m));
-                var availability = FitnessEvaluationHelper.IsAvailableStatus(land.Status) ? 100d : 0d;
+                var availability = FitnessEvaluationHelper.IsLandAvailableForOptimization(land.Status) ? 100d : 0d;
                 var externalConflict = input.ExistingLandAllocations.Any(a =>
                     a.LandId == land.LandId &&
                     FitnessEvaluationHelper.Overlaps(gene.StartDate, gene.EndDate, a.StartDate, a.EndDate));

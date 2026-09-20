@@ -27,19 +27,22 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
         private readonly IFitnessCalculator _fitnessCalculator;
         private readonly IAllocationPlanChromosomeMapper _chromosomeMapper;
         private readonly IClock _clock;
+        private readonly ILandResourceService? _landResourceService;
 
         public AllocationPlanService(
             IUnitOfWork unitOfWork,
             IDomainEventDispatcher domainEventDispatcher,
             IFitnessCalculator fitnessCalculator,
             IAllocationPlanChromosomeMapper chromosomeMapper,
-            IClock clock)
+            IClock clock,
+            ILandResourceService? landResourceService = null)
         {
             _unitOfWork = unitOfWork;
             _domainEventDispatcher = domainEventDispatcher;
             _fitnessCalculator = fitnessCalculator;
             _chromosomeMapper = chromosomeMapper;
             _clock = clock;
+            _landResourceService = landResourceService;
         }
 
         public async Task<IPaginate<AllocationPlanResponse>> ViewAllAllocationPlansAsync(
@@ -583,7 +586,13 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 currentUserId.Value,
                 _clock.Now));
 
-            return MapToResponse(approved!);
+            if (_landResourceService != null && approved.AllocationLandDetails != null)
+            {
+                var landIds = approved.AllocationLandDetails.Select(d => d.LandId).Distinct();
+                await _landResourceService.SyncLandStatusesAsync(landIds);
+            }
+
+            return MapToResponse(approved);
         }
 
         public async Task<AllocationPlanResponse?> RejectAllocationPlanAsync(
@@ -645,7 +654,13 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 currentUserId.Value,
                 _clock.Now));
 
-            return MapToResponse(rejected!);
+            if (_landResourceService != null && rejected.AllocationLandDetails != null)
+            {
+                var landIds = rejected.AllocationLandDetails.Select(d => d.LandId).Distinct();
+                await _landResourceService.SyncLandStatusesAsync(landIds);
+            }
+
+            return MapToResponse(rejected);
         }
 
         public async Task<AllocationPlanResponse?> CancelAllocationPlanAsync(int id)
@@ -690,6 +705,12 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                         .Include(p => p.AllocationHumanDetails)
                         .Include(p => p.Schedules)
                 );
+
+            if (_landResourceService != null && cancelled?.AllocationLandDetails != null)
+            {
+                var landIds = cancelled.AllocationLandDetails.Select(d => d.LandId).Distinct();
+                await _landResourceService.SyncLandStatusesAsync(landIds);
+            }
 
             return MapToResponse(cancelled!);
         }
