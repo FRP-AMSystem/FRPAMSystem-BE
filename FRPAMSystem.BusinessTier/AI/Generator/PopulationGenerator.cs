@@ -7,6 +7,15 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
     {
         private readonly Random _random = new();
 
+        public PopulationGenerator()
+        {
+        }
+
+        public PopulationGenerator(Random random)
+        {
+            _random = random;
+        }
+
         public Population Generate(OptimizationInput input)
         {
             input.Settings.Normalize();
@@ -15,41 +24,51 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
             var fingerprints = new HashSet<string>();
 
             var attempts = 0;
+            var maxAttempts = input.Settings.PopulationSize * 5;
+
             while (population.Chromosomes.Count < input.Settings.PopulationSize &&
-                   attempts < input.Settings.PopulationSize * 5)
+                   attempts < maxAttempts)
             {
                 attempts++;
+
                 var chromosome = new AllocationChromosome
                 {
-                    Genes = phases.Select(p => GenerateGene(p.PhaseId, input)).ToList()
+                    Genes = phases
+                        .Select(p => GenerateGene(p.PhaseId, input))
+                        .ToList()
                 };
+                NormalizeLandAssignments(chromosome);
 
-                if (fingerprints.Add(CreateFingerprint(chromosome)) ||
-                    population.Chromosomes.Count < Math.Max(1, input.Settings.PopulationSize / 4))
+                if (fingerprints.Add(CreateFingerprint(chromosome)))
                 {
                     population.Chromosomes.Add(chromosome);
                 }
             }
 
-            while (population.Chromosomes.Count < input.Settings.PopulationSize)
+            return population;
+        }
+
+        public static void NormalizeLandAssignments(AllocationChromosome chromosome)
+        {
+            var landId = chromosome.Genes
+                .Select(g => g.LandId)
+                .FirstOrDefault(id => id.HasValue);
+            if (!landId.HasValue)
             {
-                population.Chromosomes.Add(new AllocationChromosome
-                {
-                    Genes = phases.Select(p => GenerateGene(p.PhaseId, input)).ToList()
-                });
+                return;
             }
 
-            return population;
+            foreach (var gene in chromosome.Genes)
+            {
+                gene.LandId = landId;
+            }
         }
 
         public AllocationGene GenerateGene(int phaseId, OptimizationInput input)
         {
             var phase = input.ExperimentPhases.First(p => p.PhaseId == phaseId);
             var durationDays = Math.Max(1, (phase.ExpectedEndDate.Date - phase.ExpectedStartDate.Date).Days);
-            var shift = input.Settings.MaxScheduleShiftDays == 0
-                ? 0
-                : _random.Next(0, input.Settings.MaxScheduleShiftDays + 1);
-            var startDate = phase.ExpectedStartDate.Date.AddDays(shift);
+            var startDate = phase.ExpectedStartDate.Date;
             var endDate = startDate.AddDays(durationDays);
 
             var gene = new AllocationGene
@@ -65,6 +84,34 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
             ApplySubstitutionDuration(gene, durationDays);
 
             return gene;
+        }
+
+        public void MutateComponent(
+            AllocationGene gene,
+            OptimizationInput input,
+            MutationComponent component)
+        {
+            switch (component)
+            {
+                case MutationComponent.Land:
+                    AssignLand(gene, input, preserveRequirementMetadata: true);
+                    break;
+                case MutationComponent.Human:
+                    AssignHumans(gene, input);
+                    break;
+                case MutationComponent.Equipment:
+                    gene.AssignedEquipmentInstanceIds.Clear();
+                    gene.EquipmentAssignments.Clear();
+                    AssignEquipment(gene, input);
+                    var baseDurationDays = Math.Max(
+                        1,
+                        (input.ExperimentPhases.First(p => p.PhaseId == gene.PhaseId).ExpectedEndDate.Date -
+                         input.ExperimentPhases.First(p => p.PhaseId == gene.PhaseId).ExpectedStartDate.Date).Days);
+                    ApplySubstitutionDuration(gene, baseDurationDays);
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(component), component, null);
+            }
         }
 
         private static void ApplySubstitutionDuration(
@@ -87,13 +134,19 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
             gene.EndDate = gene.StartDate.AddDays(adjustedDurationDays);
         }
 
-        private void AssignLand(AllocationGene gene, OptimizationInput input)
+        private void AssignLand(
+            AllocationGene gene,
+            OptimizationInput input,
+            bool preserveRequirementMetadata = false)
         {
             var requirement = input.ExperimentLandRequirements
                 .OrderByDescending(r => r.RequiredArea)
                 .FirstOrDefault();
 
-            gene.ExperimentLandRequirementId = requirement?.ExpLandReqId;
+            if (!preserveRequirementMetadata)
+            {
+                gene.ExperimentLandRequirementId = requirement?.ExpLandReqId;
+            }
 
             var candidates = input.LandResources
                 .Where(l => IsAvailableStatus(l.Status))
@@ -119,6 +172,10 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
                 var candidates = input.HumanResources
                     .Where(h => !assigned.Contains(h.HumanResourceId))
                     .Where(h => IsAvailableStatus(h.Status))
+                    .Where(h => h.User?.RoleId == requirement.RoleId)
+                    .Where(h => requirement.RequiredSkillId is null ||
+                                h.HumanResourceSkills.Any(s => s.SkillId == requirement.RequiredSkillId.Value))
+                    .Where(h => HasWorkloadCapacity(h, requirement))
                     .Select(h => new
                     {
                         Human = h,
@@ -128,7 +185,7 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
                     .Take(Math.Max(requirement.Quantity * 3, requirement.Quantity))
                     .ToList();
 
-                foreach (var candidate in candidates.OrderByDescending(c => c.Score).Take(requirement.Quantity))
+                foreach (var candidate in TakeRandomCandidates(candidates, requirement.Quantity))
                 {
                     assigned.Add(candidate.Human.HumanResourceId);
                 }
@@ -158,13 +215,42 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
                     .Take(Math.Max(requirement.Quantity * 3, requirement.Quantity))
                     .ToList();
 
-                foreach (var candidate in candidates.Take(requirement.Quantity))
+                var preferredCandidates = candidates.Any(c => !c.Assignment!.IsSubstitute)
+                    ? candidates.Where(c => !c.Assignment!.IsSubstitute).ToList()
+                    : candidates;
+
+                foreach (var candidate in TakeRandomCandidates(preferredCandidates, requirement.Quantity))
                 {
                     assignedInstances.Add(candidate.Equipment.EquipmentInstanceId);
                     gene.AssignedEquipmentInstanceIds.Add(candidate.Equipment.EquipmentInstanceId);
                     gene.EquipmentAssignments.Add(candidate.Assignment!);
                 }
             }
+        }
+
+        private bool HasWorkloadCapacity(
+            HumanResourceProfile human,
+            HumanRequirementSnapshot requirement)
+        {
+            var requiredHours = requirement.WorkingHoursPerDay ?? 0d;
+            return human.CurrentWorkload + requiredHours <= human.MaxWorkingHoursPerDay;
+        }
+
+        private IEnumerable<T> TakeRandomCandidates<T>(
+            IReadOnlyList<T> candidates,
+            int quantity)
+        {
+            var available = candidates.ToList();
+            var selected = new List<T>(Math.Min(quantity, available.Count));
+
+            while (selected.Count < quantity && available.Count > 0)
+            {
+                var index = _random.Next(available.Count);
+                selected.Add(available[index]);
+                available.RemoveAt(index);
+            }
+
+            return selected;
         }
 
         private static double ScoreLand(
@@ -224,8 +310,7 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
                 score += 40d;
             }
 
-            if (!input.ExistingHumanAllocations.Any(a => a.HumanResourceId == human.HumanResourceId && Overlaps(startDate, endDate, a.StartDate, a.EndDate)) &&
-                !input.ExistingSchedules.Any(s => s.AssignedHumanResourceId == human.HumanResourceId && Overlaps(startDate, endDate, s.StartDate, s.EndDate)))
+            if (!input.ExistingHumanAllocations.Any(a => a.HumanResourceId == human.HumanResourceId && Overlaps(startDate, endDate, a.StartDate, a.EndDate)))
             {
                 score += 30d;
             }
@@ -340,7 +425,7 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
         {
             var phaseRequirements = input.PhaseHumanRequirements
                 .Where(r => r.PhaseId == phaseId)
-                .Select(r => new HumanRequirementSnapshot(r.PhaseHumanReqId, null, r.RoleId, r.RequiredSkillId, r.Quantity))
+                .Select(r => new HumanRequirementSnapshot(r.PhaseHumanReqId, null, r.RoleId, r.RequiredSkillId, r.Quantity, null))
                 .ToList();
 
             if (phaseRequirements.Count > 0)
@@ -349,7 +434,7 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
             }
 
             return input.ExperimentHumanRequirements
-                .Select(r => new HumanRequirementSnapshot(null, r.ExpHumanReqId, r.RoleId, r.RequiredSkillId, r.Quantity));
+                .Select(r => new HumanRequirementSnapshot(null, r.ExpHumanReqId, r.RoleId, r.RequiredSkillId, r.Quantity, r.WorkingHoursPerDay));
         }
 
         private static IEnumerable<EquipmentRequirementSnapshot> GetEquipmentRequirements(int phaseId, OptimizationInput input)
@@ -394,12 +479,7 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
 
         private static string CreateFingerprint(AllocationChromosome chromosome)
         {
-            return string.Join('|', chromosome.Genes
-                .OrderBy(g => g.PhaseId)
-                .Select(g =>
-                    $"{g.PhaseId}:{g.LandId}:{g.StartDate:yyyyMMdd}:{g.EndDate:yyyyMMdd}:" +
-                    $"{string.Join(',', g.AssignedHumanResourceIds.OrderBy(id => id))}:" +
-                    $"{string.Join(',', g.EquipmentAssignments.Select(e => e.EquipmentInstanceId).OrderBy(id => id))}"));
+            return AllocationChromosomeFingerprint.Create(chromosome);
         }
 
         private sealed record HumanRequirementSnapshot(
@@ -407,7 +487,8 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
             int? ExperimentHumanRequirementId,
             int RoleId,
             int? RequiredSkillId,
-            int Quantity);
+            int Quantity,
+            double? WorkingHoursPerDay = null);
 
         private sealed record EquipmentRequirementSnapshot(
             int? PhaseEquipmentRequirementId,

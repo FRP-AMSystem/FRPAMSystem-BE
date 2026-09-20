@@ -17,6 +17,15 @@ namespace FRPAMSystem.BusinessTier.Services.Interface
             int userId,
             EquipmentReturnMineRequest request);
 
+        Task<EquipmentReturnResponse?> ConfirmAsync(
+            int returnId,
+            int managerUserId);
+
+        Task<EquipmentReturnResponse?> RejectAsync(
+            int returnId,
+            int managerUserId,
+            RejectReturnRequest request);
+
         Task<EquipmentReturnResponse> CreateAsync(EquipmentReturnRequest request);
 
         Task<EquipmentReturnResponse?> UpdateAsync(int id, EquipmentReturnRequest request);

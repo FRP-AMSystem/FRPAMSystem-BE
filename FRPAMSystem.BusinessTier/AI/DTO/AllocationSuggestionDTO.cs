@@ -45,8 +45,7 @@ namespace FRPAMSystem.BusinessTier.AI.DTO
 
         public double EquipmentScore { get; set; }
 
-        public double ScheduleScore { get; set; }
-
+        public double MaintenanceScore { get; set; }
         public double PenaltyScore { get; set; }
 
         public double BonusScore { get; set; }
@@ -61,11 +60,12 @@ namespace FRPAMSystem.BusinessTier.AI.DTO
 
         public ScoreExplanationDTO Equipment { get; set; } = new();
 
-        public ScoreExplanationDTO Schedule { get; set; } = new();
-
+        public ScoreExplanationDTO Maintenance { get; set; } = new();
         public List<ScoreAdjustmentDTO> Penalties { get; set; } = new();
 
         public List<ScoreAdjustmentDTO> Bonuses { get; set; } = new();
+
+        public List<PhaseScoreExplanationDTO> Phases { get; set; } = new();
     }
 
     public class ScoreAdjustmentDTO
@@ -94,6 +94,20 @@ namespace FRPAMSystem.BusinessTier.AI.DTO
         public List<ScoreAdjustmentDTO> Penalties { get; set; } = new();
 
         public List<ScoreAdjustmentDTO> Bonuses { get; set; } = new();
+
+        public List<PhaseScoreExplanationDTO> Phases { get; set; } = new();
+    }
+
+    public class PhaseScoreExplanationDTO
+    {
+        public int PhaseId { get; set; }
+        public double BaseScore { get; set; }
+        public List<ScoreAdjustmentDTO> SubScores { get; set; } = new();
+        public List<ScoreAdjustmentDTO> Adjustments { get; set; } = new();
+        public List<ScoreAdjustmentDTO> Bonuses { get; set; } = new();
+        public List<ScoreAdjustmentDTO> Penalties { get; set; } = new();
+        public double FinalScore { get; set; }
+        public string Calculation { get; set; } = string.Empty;
     }
 
     public class ConstraintReportDTO
@@ -109,8 +123,6 @@ namespace FRPAMSystem.BusinessTier.AI.DTO
         public List<string> HumanConflicts { get; set; } = new();
 
         public List<string> EquipmentConflicts { get; set; } = new();
-
-        public List<string> ScheduleConflicts { get; set; } = new();
 
         public List<string> MaintenanceConflicts { get; set; } = new();
 
