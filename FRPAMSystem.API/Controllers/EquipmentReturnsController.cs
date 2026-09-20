@@ -64,6 +64,80 @@ namespace FRPAMSystem_BE.Controllers
             }
         }
 
+        [HttpPatch("{id:int}/confirm")]
+        [Authorize(Roles = "Admin,Manager")]
+        public async Task<IActionResult> Confirm(int id)
+        {
+            var userId = GetCurrentUserId();
+
+            if (!userId.HasValue)
+            {
+                return Unauthorized(new { success = false, message = "Invalid user token" });
+            }
+
+            try
+            {
+                var result = await _service.ConfirmAsync(id, userId.Value);
+
+                if (result == null)
+                {
+                    return NotFound(new
+                    {
+                        success = false,
+                        message = "Equipment return not found"
+                    });
+                }
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "Equipment return confirmed successfully",
+                    data = result
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPatch("{id:int}/reject")]
+        [Authorize(Roles = "Admin,Manager")]
+        public async Task<IActionResult> Reject(int id, [FromBody] RejectReturnRequest request)
+        {
+            var userId = GetCurrentUserId();
+
+            if (!userId.HasValue)
+            {
+                return Unauthorized(new { success = false, message = "Invalid user token" });
+            }
+
+            try
+            {
+                var result = await _service.RejectAsync(id, userId.Value, request);
+
+                if (result == null)
+                {
+                    return NotFound(new
+                    {
+                        success = false,
+                        message = "Equipment return not found"
+                    });
+                }
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "Equipment return rejected successfully",
+                    data = result
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
+
         [HttpGet]
         public async Task<IActionResult> ViewAll(
             [FromQuery] EquipmentReturnFilter filter,

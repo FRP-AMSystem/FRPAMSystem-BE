@@ -17,6 +17,16 @@ namespace FRPAMSystem.BusinessTier.Services.Interface
             int userId,
             EquipmentHandoverMineRequest? request = null);
 
+        Task<EquipmentHandoverResponse?> RejectMineAsync(
+            int allocationEquipmentDetailId,
+            int userId,
+            RejectHandoverRequest request);
+
+        Task<EquipmentHandoverResponse?> RejectAsync(
+            int handoverId,
+            int managerUserId,
+            RejectHandoverRequest request);
+
         Task<EquipmentHandoverResponse> CreateAsync(EquipmentHandoverRequest request);
 
         Task<EquipmentHandoverResponse?> UpdateAsync(int id, EquipmentHandoverRequest request);

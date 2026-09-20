@@ -7,5 +7,10 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
         Population Generate(OptimizationInput input);
 
         AllocationGene GenerateGene(int phaseId, OptimizationInput input);
+
+        void MutateComponent(
+            AllocationGene gene,
+            OptimizationInput input,
+            MutationComponent component);
     }
 }

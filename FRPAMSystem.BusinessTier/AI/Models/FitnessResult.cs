@@ -14,6 +14,8 @@ namespace FRPAMSystem.BusinessTier.AI.Models
 
         public double EquipmentScore { get; set; }
 
+        public double MaintenanceScore { get; set; }
+
         public int ConflictCount { get; set; }
 
         public int HardViolationCount { get; set; }
@@ -39,6 +41,8 @@ namespace FRPAMSystem.BusinessTier.AI.Models
 
         public double EquipmentScore { get; set; }
 
+        public double MaintenanceScore { get; set; }
+
         public double PenaltyScore { get; set; }
 
         public double BonusScore { get; set; }
@@ -52,6 +56,8 @@ namespace FRPAMSystem.BusinessTier.AI.Models
         public ScoreExplanation Human { get; set; } = new();
 
         public ScoreExplanation Equipment { get; set; } = new();
+
+        public ScoreExplanation Maintenance { get; set; } = new();
 
         public List<ScoreAdjustment> Penalties { get; set; } = new();
 
@@ -97,6 +103,8 @@ namespace FRPAMSystem.BusinessTier.AI.Models
 
         public List<ScoreAdjustment> Bonuses { get; set; } = new();
 
+        public List<PhaseScoreExplanation> Phases { get; set; } = new();
+
         public ScoreExplanation Clone()
         {
             return new ScoreExplanation
@@ -107,6 +115,35 @@ namespace FRPAMSystem.BusinessTier.AI.Models
                 Adjustments = Adjustments.Select(a => a.Clone()).ToList(),
                 Penalties = Penalties.Select(p => p.Clone()).ToList(),
                 Bonuses = Bonuses.Select(b => b.Clone()).ToList()
+                ,
+                Phases = Phases.Select(p => p.Clone()).ToList()
+            };
+        }
+    }
+
+    public class PhaseScoreExplanation
+    {
+        public int PhaseId { get; set; }
+        public double BaseScore { get; set; }
+        public List<ScoreAdjustment> SubScores { get; set; } = new();
+        public List<ScoreAdjustment> Adjustments { get; set; } = new();
+        public List<ScoreAdjustment> Bonuses { get; set; } = new();
+        public List<ScoreAdjustment> Penalties { get; set; } = new();
+        public double FinalScore { get; set; }
+        public string Calculation { get; set; } = string.Empty;
+
+        public PhaseScoreExplanation Clone()
+        {
+            return new PhaseScoreExplanation
+            {
+                PhaseId = PhaseId,
+                BaseScore = BaseScore,
+                SubScores = SubScores.Select(s => s.Clone()).ToList(),
+                Adjustments = Adjustments.Select(a => a.Clone()).ToList(),
+                Bonuses = Bonuses.Select(b => b.Clone()).ToList(),
+                Penalties = Penalties.Select(p => p.Clone()).ToList(),
+                FinalScore = FinalScore,
+                Calculation = Calculation
             };
         }
     }
@@ -134,4 +171,3 @@ namespace FRPAMSystem.BusinessTier.AI.Models
         public List<string> DeadlineConflicts { get; set; } = new();
     }
 }
-
