@@ -1,6 +1,7 @@
 using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.DomainEvents;
 using FRPAMSystem.BusinessTier.DomainEvents.Events;
+using FRPAMSystem.BusinessTier.Enums;
 using FRPAMSystem.BusinessTier.Payload.Schedule;
 using FRPAMSystem.BusinessTier.Services.Interface;
 using FRPAMSystem.DataTier.Abstractions;
@@ -32,6 +33,8 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             PagingModel pagingModel)
         {
             PagingModelHelper.NormalizePaging(pagingModel);
+
+            await AutoSyncInProgressSchedulesAsync();
 
             var query = _unitOfWork
                 .GetRepository<Schedule>()
@@ -96,6 +99,8 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
 
         public async Task<ScheduleResponse?> GetScheduleByIdAsync(int id)
         {
+            await AutoSyncInProgressSchedulesAsync();
+
             var schedule = await _unitOfWork
                 .GetRepository<Schedule>()
                 .FirstOrDefaultAsync(
@@ -134,6 +139,10 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
         {
             await ValidateRequestAsync(request);
 
+            var initialStatus = _clock.Now.Date >= request.StartDate.Date
+                ? ScheduleStatus.InProgress
+                : ScheduleStatus.Planned;
+
             var schedule = new Schedule
             {
                 AllocationPlanId = request.AllocationPlanId,
@@ -142,7 +151,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 Description = request.Description,
                 StartDate = request.StartDate,
                 EndDate = request.EndDate,
-                Status = request.Status.ToString(),
+                Status = initialStatus.ToString(),
                 CreatedBy = request.CreatedBy,
                 AssignedHumanResourceId = request.AssignedHumanResourceId,
                 Notes = request.Notes,
@@ -186,7 +195,25 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 return null;
             }
 
-           
+            if (!string.IsNullOrWhiteSpace(schedule.Status) &&
+                Enum.TryParse<ScheduleStatus>(schedule.Status, true, out var currentStatus))
+            {
+                var targetStatus = request.Status;
+
+                if (currentStatus != targetStatus)
+                {
+                    if (currentStatus == ScheduleStatus.Completed && targetStatus != ScheduleStatus.Completed)
+                    {
+                        throw new Exception("Cannot change status of a completed schedule.");
+                    }
+
+                    if (currentStatus == ScheduleStatus.Cancelled && targetStatus != ScheduleStatus.Cancelled)
+                    {
+                        throw new Exception("Cannot change status of a cancelled schedule.");
+                    }
+                }
+            }
+
             var previousAssignedHumanResourceId = schedule.AssignedHumanResourceId;
 
             schedule.AllocationPlanId = request.AllocationPlanId;
@@ -245,6 +272,127 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             return true;
         }
 
+        public async Task<ScheduleResponse?> CompleteScheduleAsync(int id, int userId, CompleteScheduleRequest? request = null)
+        {
+            var schedule = await _unitOfWork
+                .GetRepository<Schedule>()
+                .FirstOrDefaultAsync(
+                    predicate: s => s.ScheduleId == id,
+                    asNoTracking: false);
+
+            if (schedule == null)
+            {
+                return null;
+            }
+
+            var user = await _unitOfWork.GetRepository<User>()
+                .FirstOrDefaultAsync(
+                    predicate: u => u.UserId == userId,
+                    include: q => q.Include(u => u.Role));
+
+            var userRole = user?.Role?.RoleName;
+            var isFieldWorker = string.Equals(userRole, "Seasonal", StringComparison.OrdinalIgnoreCase) ||
+                                string.Equals(userRole, "Technician", StringComparison.OrdinalIgnoreCase);
+
+            if (isFieldWorker)
+            {
+                var humanResourceId = await GetHumanResourceIdByUserIdAsync(userId);
+                if (!humanResourceId.HasValue || schedule.AssignedHumanResourceId != humanResourceId.Value)
+                {
+                    throw new Exception("You are only authorized to complete schedules assigned to you.");
+                }
+            }
+
+            if (string.Equals(schedule.Status, ScheduleStatus.Completed.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                return await GetScheduleByIdAsync(id);
+            }
+
+            if (string.Equals(schedule.Status, ScheduleStatus.Cancelled.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                throw new Exception("Cannot complete a cancelled schedule.");
+            }
+
+            schedule.Status = ScheduleStatus.Completed.ToString();
+            if (!string.IsNullOrWhiteSpace(request?.Notes))
+            {
+                schedule.Notes = string.IsNullOrWhiteSpace(schedule.Notes)
+                    ? request.Notes.Trim()
+                    : $"{schedule.Notes}\n[Completion report]: {request.Notes.Trim()}";
+            }
+            schedule.UpdatedAt = _clock.Now;
+
+            _unitOfWork.GetRepository<Schedule>().Update(schedule);
+            await _unitOfWork.CommitAsync();
+
+            return await GetScheduleByIdAsync(id);
+        }
+
+        public async Task<ScheduleResponse?> CancelScheduleAsync(int id, int userId, CancelScheduleRequest? request = null)
+        {
+            var schedule = await _unitOfWork
+                .GetRepository<Schedule>()
+                .FirstOrDefaultAsync(
+                    predicate: s => s.ScheduleId == id,
+                    asNoTracking: false);
+
+            if (schedule == null)
+            {
+                return null;
+            }
+
+            if (string.Equals(schedule.Status, ScheduleStatus.Completed.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                throw new Exception("Cannot cancel a completed schedule.");
+            }
+
+            if (string.Equals(schedule.Status, ScheduleStatus.Cancelled.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                return await GetScheduleByIdAsync(id);
+            }
+
+            schedule.Status = ScheduleStatus.Cancelled.ToString();
+            if (!string.IsNullOrWhiteSpace(request?.Reason))
+            {
+                schedule.Notes = string.IsNullOrWhiteSpace(schedule.Notes)
+                    ? $"[Cancelled reason]: {request.Reason.Trim()}"
+                    : $"{schedule.Notes}\n[Cancelled reason]: {request.Reason.Trim()}";
+            }
+            schedule.UpdatedAt = _clock.Now;
+
+            _unitOfWork.GetRepository<Schedule>().Update(schedule);
+            await _unitOfWork.CommitAsync();
+
+            return await GetScheduleByIdAsync(id);
+        }
+
+        public async Task AutoSyncInProgressSchedulesAsync()
+        {
+            var scheduleRepo = _unitOfWork.GetRepository<Schedule>();
+            if (scheduleRepo == null) return;
+
+            var today = _clock.Now.Date;
+            var plannedStatus = ScheduleStatus.Planned.ToString();
+
+            var dueSchedules = await scheduleRepo
+                .GetListAsync(
+                    predicate: s => s.Status == plannedStatus && s.StartDate.Date <= today,
+                    asNoTracking: false
+                );
+
+            if (dueSchedules != null && dueSchedules.Count > 0)
+            {
+                foreach (var schedule in dueSchedules)
+                {
+                    schedule.Status = ScheduleStatus.InProgress.ToString();
+                    schedule.UpdatedAt = _clock.Now;
+                    scheduleRepo.Update(schedule);
+                }
+
+                await _unitOfWork.CommitAsync();
+            }
+        }
+
         
         private async Task<Schedule?> LoadScheduleWithContextAsync(int scheduleId)
         {
@@ -259,6 +407,11 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
 
         private async Task ValidateRequestAsync(ScheduleRequest request)
         {
+            if (!Enum.IsDefined(typeof(ScheduleStatus), request.Status))
+            {
+                throw new Exception($"Invalid schedule status '{request.Status}'.");
+            }
+
             if (string.IsNullOrWhiteSpace(request.Title))
             {
                 throw new Exception("Schedule title is required.");
@@ -335,8 +488,8 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             {
                 ScheduleId = schedule.ScheduleId,
                 AllocationPlanId = schedule.AllocationPlanId,
-                ExperimentId = schedule.AllocationPlan.ExperimentId,
-                ExperimentName = schedule.AllocationPlan.Experiment.ExperimentName,
+                ExperimentId = schedule.AllocationPlan?.ExperimentId ?? 0,
+                ExperimentName = schedule.AllocationPlan?.Experiment?.ExperimentName,
                 PhaseId = schedule.PhaseId,
                 PhaseName = schedule.Phase?.PhaseName,
                 Title = schedule.Title,

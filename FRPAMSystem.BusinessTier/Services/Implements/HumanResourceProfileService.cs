@@ -458,6 +458,8 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             var hasUpcomingSchedule = await _unitOfWork
                 .GetRepository<Schedule>()
                 .AnyAsync(s => s.AssignedHumanResourceId == humanResourceId &&
+                               s.Status != ScheduleStatus.Cancelled.ToString() &&
+                               s.Status != ScheduleStatus.Completed.ToString() &&
                                today <= s.EndDate.Date);
 
             if (hasUpcomingSchedule)
