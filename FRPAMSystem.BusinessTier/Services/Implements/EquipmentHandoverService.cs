@@ -1,6 +1,7 @@
 using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.Enums;
 using FRPAMSystem.BusinessTier.Payload.EquipmentHandover;
+using FRPAMSystem.BusinessTier.Payload.Notification;
 using FRPAMSystem.BusinessTier.Services.Interface;
 using FRPAMSystem.DataTier.Abstractions;
 using FRPAMSystem.DataTier.Models;
@@ -15,15 +16,18 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
         private readonly IUnitOfWork _unitOfWork;
         private readonly IAllocationEquipmentDetailService _allocationEquipmentDetailService;
         private readonly IClock _clock;
+        private readonly INotificationService? _notificationService;
 
         public EquipmentHandoverService(
             IUnitOfWork unitOfWork,
             IAllocationEquipmentDetailService allocationEquipmentDetailService,
-            IClock clock)
+            IClock clock,
+            INotificationService? notificationService = null)
         {
             _unitOfWork = unitOfWork;
             _allocationEquipmentDetailService = allocationEquipmentDetailService;
             _clock = clock;
+            _notificationService = notificationService;
         }
 
         public async Task<IPaginate<EquipmentHandoverResponse>> ViewAllAsync(
@@ -83,7 +87,10 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 .GetRepository<AllocationEquipmentDetail>()
                 .FirstOrDefaultAsync(
                     predicate: d => d.AllocationEquipmentDetailId == allocationEquipmentDetailId,
-                    include: query => query.Include(d => d.EquipmentInstance),
+                    include: query => query
+                        .Include(d => d.AllocationPlan)
+                        .Include(d => d.EquipmentInstance)
+                        .Include(d => d.AllocatedEquipmentType),
                     asNoTracking: false
                 );
 
@@ -98,12 +105,172 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                     "Equipment must be in Reserved or Allocated status before handover.");
             }
 
-            var handover = await CreateConfirmedHandoverInternalAsync(
-                detail,
-                handedOverBy: userId,
-                receivedBy: userId,
-                conditionBefore: request?.ConditionBefore,
-                note: request?.Note);
+            if (detail.AllocatedEquipmentType?.TrackingType == EquipmentTrackingType.Individual.ToString() &&
+                !detail.EquipmentInstanceId.HasValue)
+            {
+                throw new Exception(
+                    "Individual-tracked equipment must have a specific equipment instance assigned before handover.");
+            }
+
+            var pendingHandover = await _unitOfWork
+                .GetRepository<EquipmentHandover>()
+                .FirstOrDefaultAsync(
+                    predicate: h => h.AllocationEquipmentDetailId == allocationEquipmentDetailId &&
+                                    h.Status == EquipmentHandoverStatus.Pending.ToString(),
+                    asNoTracking: false
+                );
+
+            if (pendingHandover == null)
+            {
+                throw new Exception("No pending handover found for this allocation equipment detail.");
+            }
+
+            var now = _clock.Now;
+            pendingHandover.Status = EquipmentHandoverStatus.Confirmed.ToString();
+            pendingHandover.ReceivedBy = userId;
+            pendingHandover.ConfirmedAt = now;
+
+            if (!string.IsNullOrWhiteSpace(request?.ConditionBefore))
+            {
+                pendingHandover.ConditionBefore = request.ConditionBefore;
+            }
+
+            if (!string.IsNullOrWhiteSpace(request?.Note))
+            {
+                pendingHandover.Note = request.Note;
+            }
+
+            _unitOfWork.GetRepository<EquipmentHandover>().Update(pendingHandover);
+
+            detail.Status = AllocationDetailStatus.InUse.ToString();
+            if (detail.EquipmentInstanceId.HasValue && detail.EquipmentInstance != null)
+            {
+                detail.EquipmentInstance.Status = EquipmentInstanceStatus.InUse.ToString();
+                _unitOfWork.GetRepository<EquipmentInstance>().Update(detail.EquipmentInstance);
+            }
+            _unitOfWork.GetRepository<AllocationEquipmentDetail>().Update(detail);
+
+            if (_notificationService != null)
+            {
+                await _notificationService.SendAsync(new SendNotificationRequest
+                {
+                    UserId = pendingHandover.HandedOverBy,
+                    Title = "Thiết bị đã được tiếp nhận",
+                    Message = $"Researcher đã xác nhận nhận thiết bị (Mã bàn giao: #{pendingHandover.HandoverId}).",
+                    NotificationType = NotificationTypes.EquipmentHandoverConfirmed,
+                    ReferenceType = NotificationReferenceTypes.EquipmentHandover,
+                    ReferenceId = pendingHandover.HandoverId
+                });
+            }
+
+            await _unitOfWork.CommitAsync();
+
+            return MapToResponse(pendingHandover);
+        }
+
+        public async Task<EquipmentHandoverResponse?> RejectMineAsync(
+            int allocationEquipmentDetailId,
+            int userId,
+            RejectHandoverRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Reason))
+            {
+                throw new Exception("Rejection reason is required.");
+            }
+
+            if (!await _allocationEquipmentDetailService
+                    .UserCanAccessAllocationEquipmentDetailAsync(allocationEquipmentDetailId, userId))
+            {
+                return null;
+            }
+
+            var pendingHandover = await _unitOfWork
+                .GetRepository<EquipmentHandover>()
+                .FirstOrDefaultAsync(
+                    predicate: h => h.AllocationEquipmentDetailId == allocationEquipmentDetailId &&
+                                    h.Status == EquipmentHandoverStatus.Pending.ToString(),
+                    asNoTracking: false
+                );
+
+            if (pendingHandover == null)
+            {
+                throw new Exception("No pending handover found to reject.");
+            }
+
+            pendingHandover.Status = EquipmentHandoverStatus.Rejected.ToString();
+            pendingHandover.ReceivedBy = userId;
+            pendingHandover.Note = string.IsNullOrWhiteSpace(pendingHandover.Note)
+                ? $"Rejected: {request.Reason}"
+                : $"{pendingHandover.Note} | Rejected: {request.Reason}";
+            pendingHandover.ConfirmedAt = _clock.Now;
+
+            _unitOfWork.GetRepository<EquipmentHandover>().Update(pendingHandover);
+
+            if (_notificationService != null)
+            {
+                await _notificationService.SendAsync(new SendNotificationRequest
+                {
+                    UserId = pendingHandover.HandedOverBy,
+                    Title = "Bàn giao thiết bị bị từ chối",
+                    Message = $"Researcher đã từ chối nhận thiết bị (Mã bàn giao: #{pendingHandover.HandoverId}). Lý do: {request.Reason}",
+                    NotificationType = NotificationTypes.EquipmentHandoverRejected,
+                    ReferenceType = NotificationReferenceTypes.EquipmentHandover,
+                    ReferenceId = pendingHandover.HandoverId
+                });
+            }
+
+            await _unitOfWork.CommitAsync();
+
+            return MapToResponse(pendingHandover);
+        }
+
+        public async Task<EquipmentHandoverResponse?> RejectAsync(
+            int handoverId,
+            int managerUserId,
+            RejectHandoverRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Reason))
+            {
+                throw new Exception("Rejection reason is required.");
+            }
+
+            var handover = await _unitOfWork
+                .GetRepository<EquipmentHandover>()
+                .FirstOrDefaultAsync(
+                    predicate: h => h.HandoverId == handoverId,
+                    asNoTracking: false
+                );
+
+            if (handover == null)
+            {
+                return null;
+            }
+
+            if (handover.Status != EquipmentHandoverStatus.Pending.ToString())
+            {
+                throw new Exception("Only pending handovers can be rejected.");
+            }
+
+            handover.Status = EquipmentHandoverStatus.Rejected.ToString();
+            handover.Note = string.IsNullOrWhiteSpace(handover.Note)
+                ? $"Rejected: {request.Reason}"
+                : $"{handover.Note} | Rejected: {request.Reason}";
+            handover.ConfirmedAt = _clock.Now;
+
+            _unitOfWork.GetRepository<EquipmentHandover>().Update(handover);
+
+            if (_notificationService != null)
+            {
+                await _notificationService.SendAsync(new SendNotificationRequest
+                {
+                    UserId = handover.ReceivedBy,
+                    Title = "Bàn giao thiết bị đã bị hủy/từ chối",
+                    Message = $"Yêu cầu bàn giao thiết bị #{handover.HandoverId} đã bị hủy bởi Quản lý. Lý do: {request.Reason}",
+                    NotificationType = NotificationTypes.EquipmentHandoverRejected,
+                    ReferenceType = NotificationReferenceTypes.EquipmentHandover,
+                    ReferenceId = handover.HandoverId
+                });
+            }
 
             await _unitOfWork.CommitAsync();
 
@@ -113,6 +280,10 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
         public async Task<EquipmentHandoverResponse> CreateAsync(EquipmentHandoverRequest request)
         {
             await ValidateRequestAsync(request);
+
+            var status = string.IsNullOrWhiteSpace(request.Status)
+                ? EquipmentHandoverStatus.Pending.ToString()
+                : request.Status.Trim();
 
             var handover = new EquipmentHandover
             {
@@ -124,13 +295,46 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 Quantity = request.Quantity,
                 ConditionBefore = request.ConditionBefore,
                 Note = request.Note,
-                Status = string.IsNullOrWhiteSpace(request.Status)
-                    ? EquipmentHandoverStatus.Pending.ToString()
-                    : request.Status.Trim(),
+                Status = status,
                 ConfirmedAt = request.ConfirmedAt
             };
 
             await _unitOfWork.GetRepository<EquipmentHandover>().InsertAsync(handover);
+
+            if (status == EquipmentHandoverStatus.Confirmed.ToString())
+            {
+                var detail = await _unitOfWork
+                    .GetRepository<AllocationEquipmentDetail>()
+                    .FirstOrDefaultAsync(
+                        predicate: d => d.AllocationEquipmentDetailId == request.AllocationEquipmentDetailId,
+                        include: query => query.Include(d => d.EquipmentInstance),
+                        asNoTracking: false
+                    );
+
+                if (detail != null)
+                {
+                    detail.Status = AllocationDetailStatus.InUse.ToString();
+                    if (detail.EquipmentInstance != null)
+                    {
+                        detail.EquipmentInstance.Status = EquipmentInstanceStatus.InUse.ToString();
+                        _unitOfWork.GetRepository<EquipmentInstance>().Update(detail.EquipmentInstance);
+                    }
+                    _unitOfWork.GetRepository<AllocationEquipmentDetail>().Update(detail);
+                }
+            }
+            else if (status == EquipmentHandoverStatus.Pending.ToString() && _notificationService != null)
+            {
+                await _notificationService.SendAsync(new SendNotificationRequest
+                {
+                    UserId = request.ReceivedBy,
+                    Title = "Thiết bị sẵn sàng bàn giao",
+                    Message = "Thiết bị đã sẵn sàng để bàn giao cho bạn. Vui lòng kiểm tra và xác nhận nhận thiết bị.",
+                    NotificationType = NotificationTypes.EquipmentHandoverPending,
+                    ReferenceType = NotificationReferenceTypes.EquipmentHandover,
+                    ReferenceId = handover.HandoverId
+                });
+            }
+
             await _unitOfWork.CommitAsync();
 
             return MapToResponse(handover);
@@ -154,6 +358,17 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 return null;
             }
 
+            if (handover.Status == EquipmentHandoverStatus.Confirmed.ToString() ||
+                handover.Status == EquipmentHandoverStatus.Rejected.ToString())
+            {
+                throw new Exception("Cannot modify a handover that has already been confirmed or rejected.");
+            }
+
+            var previousStatus = handover.Status;
+            var targetStatus = string.IsNullOrWhiteSpace(request.Status)
+                ? handover.Status
+                : request.Status.Trim();
+
             handover.AllocationEquipmentDetailId = request.AllocationEquipmentDetailId;
             handover.EquipmentInstanceId = request.EquipmentInstanceId;
             handover.HandedOverBy = request.HandedOverBy;
@@ -162,12 +377,34 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             handover.Quantity = request.Quantity;
             handover.ConditionBefore = request.ConditionBefore;
             handover.Note = request.Note;
-            handover.Status = string.IsNullOrWhiteSpace(request.Status)
-                ? handover.Status
-                : request.Status.Trim();
+            handover.Status = targetStatus;
             handover.ConfirmedAt = request.ConfirmedAt;
 
             _unitOfWork.GetRepository<EquipmentHandover>().Update(handover);
+
+            if (targetStatus == EquipmentHandoverStatus.Confirmed.ToString() &&
+                previousStatus != EquipmentHandoverStatus.Confirmed.ToString())
+            {
+                var detail = await _unitOfWork
+                    .GetRepository<AllocationEquipmentDetail>()
+                    .FirstOrDefaultAsync(
+                        predicate: d => d.AllocationEquipmentDetailId == request.AllocationEquipmentDetailId,
+                        include: query => query.Include(d => d.EquipmentInstance),
+                        asNoTracking: false
+                    );
+
+                if (detail != null)
+                {
+                    detail.Status = AllocationDetailStatus.InUse.ToString();
+                    if (detail.EquipmentInstance != null)
+                    {
+                        detail.EquipmentInstance.Status = EquipmentInstanceStatus.InUse.ToString();
+                        _unitOfWork.GetRepository<EquipmentInstance>().Update(detail.EquipmentInstance);
+                    }
+                    _unitOfWork.GetRepository<AllocationEquipmentDetail>().Update(detail);
+                }
+            }
+
             await _unitOfWork.CommitAsync();
 
             return MapToResponse(handover);
@@ -185,6 +422,11 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             if (handover == null)
             {
                 return false;
+            }
+
+            if (handover.Status == EquipmentHandoverStatus.Confirmed.ToString())
+            {
+                throw new Exception("Cannot delete a confirmed equipment handover as it is part of the transaction audit history.");
             }
 
             _unitOfWork.GetRepository<EquipmentHandover>().Delete(handover);

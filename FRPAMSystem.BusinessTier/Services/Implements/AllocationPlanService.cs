@@ -411,6 +411,14 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 .GetRepository<AllocationPlan>()
                 .FirstOrDefaultAsync(
                     predicate: p => p.AllocationPlanId == id,
+                    include: query => query
+                        .Include(p => p.Experiment)
+                        .Include(p => p.AllocationLandDetails)
+                        .Include(p => p.AllocationHumanDetails)
+                        .Include(p => p.AllocationEquipmentDetails)
+                            .ThenInclude(d => d.EquipmentInstance)
+                        .Include(p => p.AllocationEquipmentDetails)
+                            .ThenInclude(d => d.AllocatedEquipmentType),
                     asNoTracking: false
                 );
 
@@ -446,6 +454,110 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             allocationPlan.ApprovedAt = _clock.Now;
 
             _unitOfWork.GetRepository<AllocationPlan>().Update(allocationPlan);
+
+            var proposedStatus = AllocationDetailStatus.Proposed.ToString();
+
+            if (allocationPlan.AllocationLandDetails != null)
+            {
+                foreach (var landDetail in allocationPlan.AllocationLandDetails)
+                {
+                    if (landDetail.Status == proposedStatus)
+                    {
+                        landDetail.Status = AllocationDetailStatus.Allocated.ToString();
+                        _unitOfWork.GetRepository<AllocationLandDetail>().Update(landDetail);
+                    }
+                }
+            }
+
+            if (allocationPlan.AllocationHumanDetails != null)
+            {
+                foreach (var humanDetail in allocationPlan.AllocationHumanDetails)
+                {
+                    if (humanDetail.Status == proposedStatus)
+                    {
+                        humanDetail.Status = AllocationDetailStatus.Allocated.ToString();
+                        _unitOfWork.GetRepository<AllocationHumanDetail>().Update(humanDetail);
+                    }
+                }
+            }
+
+            if (allocationPlan.AllocationEquipmentDetails != null)
+            {
+                foreach (var eqDetail in allocationPlan.AllocationEquipmentDetails)
+                {
+                    if (eqDetail.Status == proposedStatus)
+                    {
+                        if (eqDetail.EquipmentInstanceId.HasValue)
+                        {
+                            eqDetail.Status = AllocationDetailStatus.Allocated.ToString();
+
+                            if (eqDetail.EquipmentInstance != null)
+                            {
+                                eqDetail.EquipmentInstance.Status = EquipmentInstanceStatus.Reserved.ToString();
+                                _unitOfWork.GetRepository<EquipmentInstance>().Update(eqDetail.EquipmentInstance);
+                            }
+                            else
+                            {
+                                var instance = await _unitOfWork.GetRepository<EquipmentInstance>()
+                                    .FirstOrDefaultAsync(
+                                        predicate: e => e.EquipmentInstanceId == eqDetail.EquipmentInstanceId.Value,
+                                        asNoTracking: false);
+                                if (instance != null)
+                                {
+                                    instance.Status = EquipmentInstanceStatus.Reserved.ToString();
+                                    _unitOfWork.GetRepository<EquipmentInstance>().Update(instance);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            var eqType = eqDetail.AllocatedEquipmentType ?? await _unitOfWork.GetRepository<EquipmentType>()
+                                .FirstOrDefaultAsync(predicate: t => t.EquipmentTypeId == eqDetail.AllocatedEquipmentTypeId);
+
+                            if (eqType != null && eqType.TrackingType == EquipmentTrackingType.QuantityBased.ToString())
+                            {
+                                eqDetail.Status = AllocationDetailStatus.Allocated.ToString();
+                            }
+                            else
+                            {
+                                eqDetail.Status = AllocationDetailStatus.Reserved.ToString();
+                            }
+                        }
+
+                        if (eqDetail.Status == AllocationDetailStatus.Allocated.ToString())
+                        {
+                            var existingHandover = await _unitOfWork.GetRepository<EquipmentHandover>()
+                                .FirstOrDefaultAsync(predicate: h => h.AllocationEquipmentDetailId == eqDetail.AllocationEquipmentDetailId);
+
+                            if (existingHandover == null)
+                            {
+                                var pendingHandover = new EquipmentHandover
+                                {
+                                    AllocationEquipmentDetailId = eqDetail.AllocationEquipmentDetailId,
+                                    EquipmentInstanceId = eqDetail.EquipmentInstanceId,
+                                    HandedOverBy = currentUserId.Value,
+                                    ReceivedBy = allocationPlan.CreatedBy ?? currentUserId.Value,
+                                    HandoverDate = eqDetail.StartDate,
+                                    Quantity = eqDetail.Quantity,
+                                    ConditionBefore = eqDetail.EquipmentInstance?.ConditionLevel ?? EquipmentConditionLevel.Good.ToString(),
+                                    Status = EquipmentHandoverStatus.Pending.ToString(),
+                                    ConfirmedAt = null
+                                };
+                                await _unitOfWork.GetRepository<EquipmentHandover>().InsertAsync(pendingHandover);
+                            }
+                        }
+
+                        _unitOfWork.GetRepository<AllocationEquipmentDetail>().Update(eqDetail);
+                    }
+                }
+            }
+
+            if (allocationPlan.Experiment != null && allocationPlan.Experiment.Status == ExperimentStatus.Planning.ToString())
+            {
+                allocationPlan.Experiment.Status = ExperimentStatus.Ready.ToString();
+                allocationPlan.Experiment.UpdatedAt = _clock.Now;
+                _unitOfWork.GetRepository<Experiment>().Update(allocationPlan.Experiment);
+            }
 
             await _unitOfWork.CommitAsync();
 
@@ -777,13 +889,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 .AsNoTracking()
                 .ToListAsync();
 
-            var schedules = await _unitOfWork
-                .GetRepository<Schedule>()
-                .GetQueryable()
-                .Where(s => currentPlanId == null || s.AllocationPlanId != currentPlanId.Value)
-                .AsNoTracking()
-                .ToListAsync();
-
             var landAllocations = await _unitOfWork
                 .GetRepository<AllocationLandDetail>()
                 .GetQueryable()
@@ -824,7 +929,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 ExperimentEquipmentRequirements = experiment.ExperimentEquipmentRequirements.ToList(),
                 PhaseHumanRequirements = phaseHumanRequirements,
                 PhaseEquipmentRequirements = phaseEquipmentRequirements,
-                ExistingSchedules = schedules,
                 ExistingLandAllocations = landAllocations,
                 ExistingHumanAllocations = humanAllocations,
                 ExistingEquipmentAllocations = equipmentAllocations,

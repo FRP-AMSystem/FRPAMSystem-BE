@@ -26,7 +26,7 @@ namespace FRPAMSystem.BusinessTier.AI.Models
 
         public IReadOnlyCollection<PhaseEquipmentRequirement> PhaseEquipmentRequirements { get; set; } = Array.Empty<PhaseEquipmentRequirement>();
 
-        public IReadOnlyCollection<Schedule> ExistingSchedules { get; set; } = Array.Empty<Schedule>();
+
 
         public IReadOnlyCollection<AllocationLandDetail> ExistingLandAllocations { get; set; } = Array.Empty<AllocationLandDetail>();
 

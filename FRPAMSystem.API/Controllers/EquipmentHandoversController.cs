@@ -64,6 +64,84 @@ namespace FRPAMSystem_BE.Controllers
             }
         }
 
+        [HttpPatch("mine/{allocationEquipmentDetailId:int}/reject")]
+        [Authorize(Roles = "Researcher,Student,Technician")]
+        public async Task<IActionResult> RejectMineHandover(
+            int allocationEquipmentDetailId,
+            [FromBody] RejectHandoverRequest request)
+        {
+            var userId = GetCurrentUserId();
+
+            if (!userId.HasValue)
+            {
+                return Unauthorized(new { success = false, message = "Invalid user token" });
+            }
+
+            try
+            {
+                var result = await _service.RejectMineAsync(
+                    allocationEquipmentDetailId,
+                    userId.Value,
+                    request);
+
+                if (result == null)
+                {
+                    return NotFound(new
+                    {
+                        success = false,
+                        message = "Allocation equipment detail not found"
+                    });
+                }
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "Equipment handover rejected successfully",
+                    data = result
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
+        [HttpPatch("{id:int}/reject")]
+        [Authorize(Roles = "Admin,Manager")]
+        public async Task<IActionResult> Reject(int id, [FromBody] RejectHandoverRequest request)
+        {
+            var userId = GetCurrentUserId();
+
+            if (!userId.HasValue)
+            {
+                return Unauthorized(new { success = false, message = "Invalid user token" });
+            }
+
+            try
+            {
+                var result = await _service.RejectAsync(id, userId.Value, request);
+
+                if (result == null)
+                {
+                    return NotFound(new
+                    {
+                        success = false,
+                        message = "Equipment handover not found"
+                    });
+                }
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "Equipment handover rejected successfully",
+                    data = result
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
+
         [HttpGet]
         public async Task<IActionResult> ViewAll(
             [FromQuery] EquipmentHandoverFilter filter,
