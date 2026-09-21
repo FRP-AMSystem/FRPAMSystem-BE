@@ -56,6 +56,12 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness.Evaluators
                    status.Equals("Active", StringComparison.OrdinalIgnoreCase);
         }
 
+        public static bool IsLandAvailableForOptimization(string? status)
+        {
+            return status is null ||
+                   !status.Equals("Unavailable", StringComparison.OrdinalIgnoreCase);
+        }
+
         public static bool IsMaintenanceStatus(string? status)
         {
             return status is not null &&

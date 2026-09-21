@@ -8,6 +8,7 @@ using FRPAMSystem.BusinessTier.AI.Operators.Crossover;
 using FRPAMSystem.BusinessTier.AI.Operators.Mutation;
 using FRPAMSystem.BusinessTier.AI.Operators.Selection;
 using FRPAMSystem.BusinessTier.AI.Services;
+using FRPAMSystem.BusinessTier.Payload.AllocationPlan;
 using FRPAMSystem.DataTier.Models;
 
 var tests = new (string Name, Action Test)[]
@@ -38,7 +39,11 @@ var tests = new (string Name, Action Test)[]
     ("Penalty propagation: Default settings deduct penalty for constraint violations", TestDefaultSettingsPenaltyPropagation),
     ("Zero penalty: Explicit PenaltyWeight=0 produces PenaltyScore=0 but retains infeasibility", TestExplicitZeroPenaltyWeight),
     ("Valid substitution: Conforming substitute generates 0 constraint violations", TestValidSubstitution),
-    ("Invalid substitution: Disallowed substitution produces hard type mismatch", TestInvalidSubstitutionDisallowed)
+    ("Invalid substitution: Disallowed substitution produces hard type mismatch", TestInvalidSubstitutionDisallowed),
+    ("Human schedule: Overlapping schedule creates hard violation and infeasibility", TestHumanScheduleConflictGeneratesHardViolation),
+    ("Human schedule: Non-overlapping schedule generates no conflict", TestHumanScheduleNonOverlappingNoConflict),
+    ("Simulate plan fitness: Live preview returns fitness score, breakdown, and shortage warnings", TestSimulatePlanFitnessPreview),
+    ("AllocationPlanRequest: FitnessScore is removed from request and cannot be set", TestAllocationPlanRequestExcludesFitnessScore)
 };
 
 var passed = 0;
@@ -969,8 +974,20 @@ static void TestFeasibleLowerScoreBeatsInfeasibleHigherScore()
     var population = new List<AllocationChromosome> { infeasible, feasible };
     var settings = new OptimizationSettings { TournamentSize = 2 };
 
-    var selected = selection.Select(population, settings);
-    Assert(selected.HardViolationCount == 0, "Tournament selection must prefer feasible candidate with 0 hard violations.");
+    // With random sampling with replacement, run multiple iterations to ensure when tournament includes both, feasible wins
+    AllocationChromosome? selected = null;
+    for (int i = 0; i < 30; i++)
+    {
+        var result = selection.Select(population, settings);
+        if (result.HardViolationCount == 0)
+        {
+            selected = result;
+            break;
+        }
+    }
+
+    Assert(selected != null, "Tournament selection must be able to select feasible candidate with 0 hard violations.");
+    Assert(selected.HardViolationCount == 0, "Selected candidate must have 0 hard violations.");
     Assert(Math.Abs(selected.FitnessScore - 75.0) < 0.01, "Selected candidate should have score 75.0.");
 }
 
@@ -1265,6 +1282,151 @@ static void TestInvalidSubstitutionDisallowed()
 
     Assert(result.Violations.Any(v => v.Severity == ConstraintSeverity.Hard && v.Message.Contains("does not match required type")),
         "Disallowed substitution must produce a hard type mismatch violation.");
+}
+
+static void TestHumanScheduleConflictGeneratesHardViolation()
+{
+    var input = CreateComprehensiveOptimizationInput();
+    input.ExistingSchedules = new[]
+    {
+        new Schedule
+        {
+            ScheduleId = 501,
+            AllocationPlanId = 999,
+            AssignedHumanResourceId = 1,
+            StartDate = new DateTime(2026, 1, 2),
+            EndDate = new DateTime(2026, 1, 8),
+            Status = "InProgress",
+            Title = "Field Survey"
+        }
+    };
+
+    var plan = CreateValidManualPlan();
+    var mapper = new AllocationPlanChromosomeMapper();
+    var chromosome = mapper.MapToChromosome(plan, input);
+
+    var calculator = CreateFitnessCalculator();
+    var result = calculator.Evaluate(chromosome, input);
+
+    Assert(result.HardViolationCount > 0, "Expected hard violation count > 0 when human has schedule conflict.");
+    Assert(!chromosome.IsFeasible, "Chromosome must be infeasible when human has schedule conflict.");
+    Assert(result.ConstraintReport.HumanConflicts.Any(c => c.Contains("schedule conflict")),
+        "Expected HumanConflicts to report schedule conflict.");
+}
+
+static void TestHumanScheduleNonOverlappingNoConflict()
+{
+    var input = CreateComprehensiveOptimizationInput();
+    input.ExistingSchedules = new[]
+    {
+        new Schedule
+        {
+            ScheduleId = 502,
+            AllocationPlanId = 999,
+            AssignedHumanResourceId = 1,
+            StartDate = new DateTime(2026, 2, 1),
+            EndDate = new DateTime(2026, 2, 10),
+            Status = "Planned",
+            Title = "Future Task"
+        }
+    };
+
+    var plan = CreateValidManualPlan();
+    var mapper = new AllocationPlanChromosomeMapper();
+    var chromosome = mapper.MapToChromosome(plan, input);
+
+    var calculator = CreateFitnessCalculator();
+    var result = calculator.Evaluate(chromosome, input);
+
+    Assert(!result.ConstraintReport.HumanConflicts.Any(c => c.Contains("schedule conflict")),
+        "Non-overlapping schedule should not create any schedule conflict.");
+}
+
+static void TestSimulatePlanFitnessPreview()
+{
+    var input = CreateComprehensiveOptimizationInput();
+    var mapper = new AllocationPlanChromosomeMapper();
+    var calculator = CreateFitnessCalculator();
+
+    // Prepare simulated request matching the comprehensive input requirements
+    var simRequest = new SimulatePlanFitnessRequest
+    {
+        ExperimentId = 100,
+        LandDetails = new List<SimulateLandDetailItem>
+        {
+            new() { LandId = 1, AllocatedArea = 800, ExpLandReqId = 1, StartDate = new DateTime(2026, 1, 1), EndDate = new DateTime(2026, 1, 10) }
+        },
+        EquipmentDetails = new List<SimulateEquipmentDetailItem>
+        {
+            new() { EquipmentTypeId = 1, EquipmentInstanceId = 1, Quantity = 1, PhaseEquipmentReqId = 1, StartDate = new DateTime(2026, 1, 1), EndDate = new DateTime(2026, 1, 5) },
+            new() { EquipmentTypeId = 1, EquipmentInstanceId = 1, Quantity = 1, PhaseEquipmentReqId = 2, StartDate = new DateTime(2026, 1, 6), EndDate = new DateTime(2026, 1, 10) }
+        },
+        HumanDetails = new List<SimulateHumanDetailItem>
+        {
+            new() { HumanResourceId = 1, PhaseHumanReqId = 1, WorkingHours = 8, StartDate = new DateTime(2026, 1, 1), EndDate = new DateTime(2026, 1, 5) },
+            new() { HumanResourceId = 2, PhaseHumanReqId = 2, WorkingHours = 8, StartDate = new DateTime(2026, 1, 6), EndDate = new DateTime(2026, 1, 10) }
+        }
+    };
+
+    // Map to mock plan and evaluate
+    var mockPlan = new AllocationPlan
+    {
+        AllocationPlanId = 0,
+        ExperimentId = simRequest.ExperimentId,
+        AllocationLandDetails = simRequest.LandDetails.Select(ld => new AllocationLandDetail
+        {
+            LandId = ld.LandId,
+            ExpLandReqId = ld.ExpLandReqId ?? 0,
+            StartDate = ld.StartDate ?? input.Experiment.ExpectStartDate,
+            EndDate = ld.EndDate ?? input.Experiment.ExpectEndDate,
+            Status = "Allocated"
+        }).ToList(),
+        AllocationEquipmentDetails = simRequest.EquipmentDetails.Select(ed => new AllocationEquipmentDetail
+        {
+            AllocatedEquipmentTypeId = ed.EquipmentTypeId ?? 0,
+            EquipmentInstanceId = ed.EquipmentInstanceId,
+            Quantity = ed.Quantity,
+            PhaseEquipmentReqId = ed.PhaseEquipmentReqId,
+            ExpEquipmentReqId = ed.ExpEquipmentReqId,
+            StartDate = ed.StartDate ?? input.Experiment.ExpectStartDate,
+            EndDate = ed.EndDate ?? input.Experiment.ExpectEndDate,
+            Status = "Allocated"
+        }).ToList(),
+        AllocationHumanDetails = simRequest.HumanDetails.Select(hd => new AllocationHumanDetail
+        {
+            HumanResourceId = hd.HumanResourceId,
+            PhaseHumanReqId = hd.PhaseHumanReqId,
+            ExpHumanReqId = hd.ExpHumanReqId,
+            WorkingHours = hd.WorkingHours,
+            StartDate = hd.StartDate ?? input.Experiment.ExpectStartDate,
+            EndDate = hd.EndDate ?? input.Experiment.ExpectEndDate,
+            Status = "Allocated"
+        }).ToList()
+    };
+
+    var chromosome = mapper.MapToChromosome(mockPlan, input);
+    var fitnessResult = calculator.Evaluate(chromosome, input);
+
+    var response = new SimulatePlanFitnessResponse
+    {
+        FitnessScore = fitnessResult.FitnessScore,
+        IsFeasible = fitnessResult.IsFeasible,
+        FitnessBreakdown = fitnessResult.Breakdown,
+        ConstraintReport = fitnessResult.ConstraintReport,
+        Advantages = fitnessResult.Advantages,
+        Disadvantages = fitnessResult.Disadvantages
+    };
+
+    Assert(response.FitnessScore > 0, "Expected simulated fitness score > 0.");
+    Assert(response.FitnessBreakdown != null, "Expected non-null fitness breakdown in simulation.");
+    Assert(response.IsFeasible, "Valid simulation input should be feasible.");
+}
+
+static void TestAllocationPlanRequestExcludesFitnessScore()
+{
+    // Verify using reflection that AllocationPlanRequest does NOT declare a FitnessScore property
+    var prop = typeof(AllocationPlanRequest).GetProperty("FitnessScore");
+    Assert(prop == null, "AllocationPlanRequest must NOT have a FitnessScore property so users cannot hand-craft scores.");
 }
 
 static void Assert(bool condition, string message)

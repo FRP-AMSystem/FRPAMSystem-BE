@@ -1,4 +1,4 @@
-﻿using FRPAMSystem.BusinessTier.Constants;
+using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.Payload.AllocationLandDetail;
 using FRPAMSystem.BusinessTier.Services.Interface;
 using Microsoft.AspNetCore.Authorization;
@@ -17,6 +17,21 @@ namespace FRPAMSystem_BE.Controllers
             IAllocationLandDetailService allocationLandDetailService)
         {
             _allocationLandDetailService = allocationLandDetailService;
+        }
+
+        [HttpGet("available-lands")]
+        public async Task<IActionResult> GetAvailableLands(
+            [FromQuery] AvailableLandFilter filter)
+        {
+            var result = await _allocationLandDetailService
+                .GetAvailableLandsAsync(filter);
+
+            return Ok(new
+            {
+                success = true,
+                message = "Get available lands successfully",
+                data = result
+            });
         }
 
         [HttpGet]

@@ -1,3 +1,4 @@
+using FRPAMSystem.BusinessTier.AI.Fitness.Evaluators;
 using FRPAMSystem.BusinessTier.AI.Models;
 using FRPAMSystem.DataTier.Models;
 
@@ -149,7 +150,7 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
             }
 
             var candidates = input.LandResources
-                .Where(l => IsAvailableStatus(l.Status))
+                .Where(l => FitnessEvaluationHelper.IsLandAvailableForOptimization(l.Status))
                 .Select(l => new
                 {
                     Land = l,
@@ -311,6 +312,11 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
             }
 
             if (!input.ExistingHumanAllocations.Any(a => a.HumanResourceId == human.HumanResourceId && Overlaps(startDate, endDate, a.StartDate, a.EndDate)))
+            {
+                score += 30d;
+            }
+
+            if (!input.ExistingSchedules.Any(s => s.AssignedHumanResourceId == human.HumanResourceId && Overlaps(startDate, endDate, s.StartDate, s.EndDate)))
             {
                 score += 30d;
             }

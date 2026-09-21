@@ -17,5 +17,9 @@ namespace FRPAMSystem.BusinessTier.Services.Interface
         Task<LandResourceResponse?> UpdateLandResourceAsync(int id, LandResourceRequest request);
 
         Task<bool> DeleteLandResourceAsync(int id);
+
+        Task SyncLandStatusAsync(int landId);
+
+        Task SyncLandStatusesAsync(IEnumerable<int> landIds);
     }
 }

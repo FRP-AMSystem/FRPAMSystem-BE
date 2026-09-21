@@ -27,19 +27,22 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
         private readonly IFitnessCalculator _fitnessCalculator;
         private readonly IAllocationPlanChromosomeMapper _chromosomeMapper;
         private readonly IClock _clock;
+        private readonly ILandResourceService? _landResourceService;
 
         public AllocationPlanService(
             IUnitOfWork unitOfWork,
             IDomainEventDispatcher domainEventDispatcher,
             IFitnessCalculator fitnessCalculator,
             IAllocationPlanChromosomeMapper chromosomeMapper,
-            IClock clock)
+            IClock clock,
+            ILandResourceService? landResourceService = null)
         {
             _unitOfWork = unitOfWork;
             _domainEventDispatcher = domainEventDispatcher;
             _fitnessCalculator = fitnessCalculator;
             _chromosomeMapper = chromosomeMapper;
             _clock = clock;
+            _landResourceService = landResourceService;
         }
 
         public async Task<IPaginate<AllocationPlanResponse>> ViewAllAllocationPlansAsync(
@@ -143,7 +146,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             var allocationPlan = new AllocationPlan
             {
                 ExperimentId = request.ExperimentId,
-                FitnessScore = request.FitnessScore,
+                FitnessScore = null,
                 CreatedBy = currentUserId,
                 ApproveBy = null,
                 ApproveStatus = request.ApproveStatus.ToString(),
@@ -215,7 +218,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             }
 
             allocationPlan.ExperimentId = request.ExperimentId;
-            allocationPlan.FitnessScore = request.FitnessScore;
             allocationPlan.ApproveStatus = request.ApproveStatus.ToString();
 
             if (request.ApproveStatus != AllocationPlanStatus.Approved)
@@ -583,7 +585,13 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 currentUserId.Value,
                 _clock.Now));
 
-            return MapToResponse(approved!);
+            if (_landResourceService != null && approved.AllocationLandDetails != null)
+            {
+                var landIds = approved.AllocationLandDetails.Select(d => d.LandId).Distinct();
+                await _landResourceService.SyncLandStatusesAsync(landIds);
+            }
+
+            return MapToResponse(approved);
         }
 
         public async Task<AllocationPlanResponse?> RejectAllocationPlanAsync(
@@ -645,7 +653,13 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 currentUserId.Value,
                 _clock.Now));
 
-            return MapToResponse(rejected!);
+            if (_landResourceService != null && rejected.AllocationLandDetails != null)
+            {
+                var landIds = rejected.AllocationLandDetails.Select(d => d.LandId).Distinct();
+                await _landResourceService.SyncLandStatusesAsync(landIds);
+            }
+
+            return MapToResponse(rejected);
         }
 
         public async Task<AllocationPlanResponse?> CancelAllocationPlanAsync(int id)
@@ -690,6 +704,12 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                         .Include(p => p.AllocationHumanDetails)
                         .Include(p => p.Schedules)
                 );
+
+            if (_landResourceService != null && cancelled?.AllocationLandDetails != null)
+            {
+                var landIds = cancelled.AllocationLandDetails.Select(d => d.LandId).Distinct();
+                await _landResourceService.SyncLandStatusesAsync(landIds);
+            }
 
             return MapToResponse(cancelled!);
         }
@@ -889,24 +909,55 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 .AsNoTracking()
                 .ToListAsync();
 
+            var cancelledDetailStatus = AllocationDetailStatus.Cancelled.ToString();
+            var completedDetailStatus = AllocationDetailStatus.Completed.ToString();
+            var rejectedPlanStatus = AllocationPlanStatus.Rejected.ToString();
+            var cancelledPlanStatus = AllocationPlanStatus.Cancelled.ToString();
+            var cancelledScheduleStatus = ScheduleStatus.Cancelled.ToString();
+            var completedScheduleStatus = ScheduleStatus.Completed.ToString();
+
             var landAllocations = await _unitOfWork
                 .GetRepository<AllocationLandDetail>()
                 .GetQueryable()
-                .Where(a => currentPlanId == null || a.AllocationPlanId != currentPlanId.Value)
+                .Include(a => a.AllocationPlan)
+                .Where(a => (currentPlanId == null || a.AllocationPlanId != currentPlanId.Value) &&
+                            a.Status != cancelledDetailStatus &&
+                            a.Status != completedDetailStatus &&
+                            (a.AllocationPlan == null || (a.AllocationPlan.ApproveStatus != rejectedPlanStatus &&
+                                                          a.AllocationPlan.ApproveStatus != cancelledPlanStatus)))
                 .AsNoTracking()
                 .ToListAsync();
 
             var humanAllocations = await _unitOfWork
                 .GetRepository<AllocationHumanDetail>()
                 .GetQueryable()
-                .Where(a => currentPlanId == null || a.AllocationPlanId != currentPlanId.Value)
+                .Include(a => a.AllocationPlan)
+                .Where(a => (currentPlanId == null || a.AllocationPlanId != currentPlanId.Value) &&
+                            a.Status != cancelledDetailStatus &&
+                            a.Status != completedDetailStatus &&
+                            (a.AllocationPlan == null || (a.AllocationPlan.ApproveStatus != rejectedPlanStatus &&
+                                                          a.AllocationPlan.ApproveStatus != cancelledPlanStatus)))
                 .AsNoTracking()
                 .ToListAsync();
 
             var equipmentAllocations = await _unitOfWork
                 .GetRepository<AllocationEquipmentDetail>()
                 .GetQueryable()
-                .Where(a => currentPlanId == null || a.AllocationPlanId != currentPlanId.Value)
+                .Include(a => a.AllocationPlan)
+                .Where(a => (currentPlanId == null || a.AllocationPlanId != currentPlanId.Value) &&
+                            a.Status != cancelledDetailStatus &&
+                            a.Status != completedDetailStatus &&
+                            (a.AllocationPlan == null || (a.AllocationPlan.ApproveStatus != rejectedPlanStatus &&
+                                                          a.AllocationPlan.ApproveStatus != cancelledPlanStatus)))
+                .AsNoTracking()
+                .ToListAsync();
+
+            var schedules = await _unitOfWork
+                .GetRepository<Schedule>()
+                .GetQueryable()
+                .Where(s => (currentPlanId == null || s.AllocationPlanId != currentPlanId.Value) &&
+                            s.Status != cancelledScheduleStatus &&
+                            s.Status != completedScheduleStatus)
                 .AsNoTracking()
                 .ToListAsync();
 
@@ -932,6 +983,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 ExistingLandAllocations = landAllocations,
                 ExistingHumanAllocations = humanAllocations,
                 ExistingEquipmentAllocations = equipmentAllocations,
+                ExistingSchedules = schedules,
                 EquipmentSubstitutions = substitutions,
                 Settings = settings?.Clone() ?? new OptimizationSettings()
             };
@@ -975,18 +1027,273 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             return response;
         }
 
-        private static void ValidateAllocationPlanRequest(
-            AllocationPlanRequest request)
+        public async Task<SimulatePlanFitnessResponse> SimulatePlanFitnessAsync(
+            SimulatePlanFitnessRequest request)
         {
             if (request.ExperimentId <= 0)
             {
                 throw new Exception("ExperimentId is required.");
             }
 
-            if (request.FitnessScore.HasValue &&
-                request.FitnessScore.Value < 0)
+            var input = await BuildOptimizationInputForPlanAsync(
+                request.ExperimentId,
+                request.CurrentPlanId,
+                null);
+
+            var mockPlan = new AllocationPlan
             {
-                throw new Exception("Fitness score cannot be negative.");
+                AllocationPlanId = request.CurrentPlanId ?? 0,
+                ExperimentId = request.ExperimentId,
+                AllocationLandDetails = request.LandDetails?.Select(ld => new AllocationLandDetail
+                {
+                    LandId = ld.LandId,
+                    ExpLandReqId = ld.ExpLandReqId ?? 0,
+                    StartDate = ld.StartDate ?? input.Experiment.ExpectStartDate,
+                    EndDate = ld.EndDate ?? input.Experiment.ExpectEndDate,
+                    Status = AllocationDetailStatus.Proposed.ToString()
+                }).ToList() ?? new List<AllocationLandDetail>(),
+
+                AllocationEquipmentDetails = request.EquipmentDetails?.Select(ed => new AllocationEquipmentDetail
+                {
+                    AllocatedEquipmentTypeId = ed.EquipmentTypeId ?? 0,
+                    EquipmentInstanceId = ed.EquipmentInstanceId,
+                    Quantity = ed.Quantity > 0 ? ed.Quantity : 1,
+                    ExpEquipmentReqId = ed.ExpEquipmentReqId,
+                    PhaseEquipmentReqId = ed.PhaseEquipmentReqId,
+                    IsSubstitute = ed.IsSubstitute,
+                    EfficiencyRate = ed.EfficiencyRate > 0 ? ed.EfficiencyRate : 1.0,
+                    StartDate = ed.StartDate ?? input.Experiment.ExpectStartDate,
+                    EndDate = ed.EndDate ?? input.Experiment.ExpectEndDate,
+                    Status = AllocationDetailStatus.Proposed.ToString()
+                }).ToList() ?? new List<AllocationEquipmentDetail>(),
+
+                AllocationHumanDetails = request.HumanDetails?.Select(hd => new AllocationHumanDetail
+                {
+                    HumanResourceId = hd.HumanResourceId,
+                    ExpHumanReqId = hd.ExpHumanReqId,
+                    PhaseHumanReqId = hd.PhaseHumanReqId,
+                    WorkingHours = hd.WorkingHours > 0 ? hd.WorkingHours : 8.0,
+                    StartDate = hd.StartDate ?? input.Experiment.ExpectStartDate,
+                    EndDate = hd.EndDate ?? input.Experiment.ExpectEndDate,
+                    Status = AllocationDetailStatus.Proposed.ToString()
+                }).ToList() ?? new List<AllocationHumanDetail>(),
+
+                Schedules = request.Schedules?.Select(sc => new Schedule
+                {
+                    Title = sc.Title,
+                    PhaseId = sc.PhaseId,
+                    StartDate = sc.StartDate,
+                    EndDate = sc.EndDate,
+                    AssignedHumanResourceId = sc.AssignedHumanResourceId,
+                    Status = ScheduleStatus.Planned.ToString()
+                }).ToList() ?? new List<Schedule>()
+            };
+
+            var chromosome = _chromosomeMapper.MapToChromosome(mockPlan, input);
+            var fitnessResult = _fitnessCalculator.Evaluate(chromosome, input);
+
+            var shortages = new List<string>();
+            foreach (var req in input.ExperimentEquipmentRequirements)
+            {
+                var allocated = mockPlan.AllocationEquipmentDetails
+                    .Where(d => d.ExpEquipmentReqId == req.ExpEquipmentReqId)
+                    .Sum(d => d.Quantity);
+                if (allocated < req.Quantity)
+                {
+                    var typeName = req.EquipmentType?.Name ?? $"Equipment Type {req.EquipmentTypeId}";
+                    shortages.Add($"Lack {req.Quantity - allocated} {typeName} for experiment.");
+                }
+            }
+            foreach (var req in input.PhaseEquipmentRequirements)
+            {
+                var allocated = mockPlan.AllocationEquipmentDetails
+                    .Where(d => d.PhaseEquipmentReqId == req.PhaseEquipmentReqId)
+                    .Sum(d => d.Quantity);
+                if (allocated < req.Quantity)
+                {
+                    var typeName = req.EquipmentType?.Name ?? $"Equipment Type {req.EquipmentTypeId}";
+                    shortages.Add($"Lack {req.Quantity - allocated} {typeName} for phase {req.PhaseId}.");
+                }
+            }
+
+            var violations = new List<string>();
+            if (fitnessResult.ConstraintReport != null)
+            {
+                violations.AddRange(fitnessResult.ConstraintReport.LandConflicts);
+                violations.AddRange(fitnessResult.ConstraintReport.HumanConflicts);
+                violations.AddRange(fitnessResult.ConstraintReport.EquipmentConflicts);
+                violations.AddRange(fitnessResult.ConstraintReport.MaintenanceConflicts);
+                violations.AddRange(fitnessResult.ConstraintReport.SkillConflicts);
+                violations.AddRange(fitnessResult.ConstraintReport.RoleConflicts);
+                violations.AddRange(fitnessResult.ConstraintReport.DeadlineConflicts);
+            }
+
+            return new SimulatePlanFitnessResponse
+            {
+                FitnessScore = fitnessResult.FitnessScore,
+                IsFeasible = fitnessResult.IsFeasible,
+                FitnessBreakdown = fitnessResult.Breakdown,
+                ConstraintReport = fitnessResult.ConstraintReport,
+                Advantages = fitnessResult.Advantages,
+                Disadvantages = fitnessResult.Disadvantages,
+                Shortages = shortages,
+                Violations = violations
+            };
+        }
+
+        public async Task<AllocationPlanResponse> CreateAllocationPlanWithDetailsAsync(
+            CreateAllocationPlanWithDetailsRequest request,
+            int? currentUserId)
+        {
+            if (request.ExperimentId <= 0)
+            {
+                throw new Exception("ExperimentId is required.");
+            }
+
+            var experiment = await _unitOfWork
+                .GetRepository<Experiment>()
+                .FirstOrDefaultAsync(predicate: e => e.ExperimentId == request.ExperimentId);
+
+            if (experiment == null)
+            {
+                throw new Exception("Experiment does not exist.");
+            }
+
+            if (currentUserId.HasValue)
+            {
+                var creatorExists = await _unitOfWork
+                    .GetRepository<User>()
+                    .AnyAsync(u => u.UserId == currentUserId.Value);
+
+                if (!creatorExists)
+                {
+                    throw new Exception("Current user does not exist.");
+                }
+            }
+
+            var allocationPlan = new AllocationPlan
+            {
+                ExperimentId = request.ExperimentId,
+                FitnessScore = null,
+                CreatedBy = currentUserId,
+                ApproveBy = null,
+                ApproveStatus = request.ApproveStatus.ToString(),
+                ApprovedAt = null
+            };
+
+            await _unitOfWork.GetRepository<AllocationPlan>().InsertAsync(allocationPlan);
+            await _unitOfWork.CommitAsync();
+
+            int planId = allocationPlan.AllocationPlanId;
+
+            // Insert Land Details
+            if (request.LandDetails != null && request.LandDetails.Count > 0)
+            {
+                foreach (var landReq in request.LandDetails)
+                {
+                    var landDetail = new AllocationLandDetail
+                    {
+                        AllocationPlanId = planId,
+                        LandId = landReq.LandId,
+                        ExpLandReqId = landReq.ExpLandReqId,
+                        StartDate = landReq.StartDate,
+                        EndDate = landReq.EndDate,
+                        Status = landReq.Status.ToString()
+                    };
+                    await _unitOfWork.GetRepository<AllocationLandDetail>().InsertAsync(landDetail);
+                }
+            }
+
+            // Insert Equipment Details
+            if (request.EquipmentDetails != null && request.EquipmentDetails.Count > 0)
+            {
+                foreach (var eqReq in request.EquipmentDetails)
+                {
+                    var eqDetail = new AllocationEquipmentDetail
+                    {
+                        AllocationPlanId = planId,
+                        ExpEquipmentReqId = eqReq.ExpEquipmentReqId,
+                        PhaseEquipmentReqId = eqReq.PhaseEquipmentReqId,
+                        AllocatedEquipmentTypeId = eqReq.AllocatedEquipmentTypeId,
+                        EquipmentInstanceId = eqReq.EquipmentInstanceId,
+                        Quantity = eqReq.Quantity,
+                        IsSubstitute = eqReq.IsSubstitute,
+                        EfficiencyRate = eqReq.EfficiencyRate,
+                        StartDate = eqReq.StartDate,
+                        EndDate = eqReq.EndDate,
+                        Status = eqReq.Status.ToString()
+                    };
+                    await _unitOfWork.GetRepository<AllocationEquipmentDetail>().InsertAsync(eqDetail);
+                }
+            }
+
+            // Insert Human Details
+            if (request.HumanDetails != null && request.HumanDetails.Count > 0)
+            {
+                foreach (var huReq in request.HumanDetails)
+                {
+                    var huDetail = new AllocationHumanDetail
+                    {
+                        AllocationPlanId = planId,
+                        ExpHumanReqId = huReq.ExpHumanReqId,
+                        PhaseHumanReqId = huReq.PhaseHumanReqId,
+                        HumanResourceId = huReq.HumanResourceId,
+                        WorkingHours = huReq.WorkingHours,
+                        StartDate = huReq.StartDate,
+                        EndDate = huReq.EndDate,
+                        Status = huReq.Status.ToString()
+                    };
+                    await _unitOfWork.GetRepository<AllocationHumanDetail>().InsertAsync(huDetail);
+                }
+            }
+
+            // Insert Schedules
+            if (request.Schedules != null && request.Schedules.Count > 0)
+            {
+                foreach (var scReq in request.Schedules)
+                {
+                    var schedule = new Schedule
+                    {
+                        AllocationPlanId = planId,
+                        PhaseId = scReq.PhaseId,
+                        Title = scReq.Title,
+                        Description = scReq.Description,
+                        StartDate = scReq.StartDate,
+                        EndDate = scReq.EndDate,
+                        Status = scReq.Status.ToString(),
+                        CreatedBy = currentUserId ?? scReq.CreatedBy,
+                        AssignedHumanResourceId = scReq.AssignedHumanResourceId,
+                        Notes = scReq.Notes,
+                        Priority = scReq.Priority
+                    };
+                    await _unitOfWork.GetRepository<Schedule>().InsertAsync(schedule);
+                }
+            }
+
+            await _unitOfWork.CommitAsync();
+
+            await _domainEventDispatcher.DispatchAsync(new AllocationPlanGeneratedEvent(
+                planId,
+                allocationPlan.ExperimentId,
+                experiment.ExperimentName,
+                allocationPlan.CreatedBy,
+                _clock.Now));
+
+            var evaluated = await EvaluatePlanFitnessAsync(planId);
+            if (evaluated != null)
+            {
+                return evaluated;
+            }
+
+            return (await GetAllocationPlanByIdAsync(planId))!;
+        }
+
+        private static void ValidateAllocationPlanRequest(
+            AllocationPlanRequest request)
+        {
+            if (request.ExperimentId <= 0)
+            {
+                throw new Exception("ExperimentId is required.");
             }
         }
     }

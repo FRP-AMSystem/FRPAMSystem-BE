@@ -34,6 +34,8 @@ namespace FRPAMSystem.BusinessTier.AI.Models
 
         public IReadOnlyCollection<AllocationEquipmentDetail> ExistingEquipmentAllocations { get; set; } = Array.Empty<AllocationEquipmentDetail>();
 
+        public IReadOnlyCollection<Schedule> ExistingSchedules { get; set; } = Array.Empty<Schedule>();
+
         public IReadOnlyCollection<EquipmentSubstitution> EquipmentSubstitutions { get; set; } = Array.Empty<EquipmentSubstitution>();
 
         public OptimizationSettings Settings { get; set; } = new();

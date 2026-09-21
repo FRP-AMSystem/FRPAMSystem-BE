@@ -658,6 +658,35 @@ namespace FRPAMSystem.NotificationTests.Services
             Assert.True(result.PenaltyScore <= 0d);
         }
 
+        [Theory]
+        [InlineData("Reserved")]
+        [InlineData("InUse")]
+        public void Test13B_ReservedAndInUse_FeasibleWhenNoConflict(string landStatus)
+        {
+            var input = CreateBaseInput();
+            input.LandResources.First().Status = landStatus;
+
+            var calculator = CreateFitnessCalculator();
+            var chromosome = new AllocationChromosome
+            {
+                Genes = new List<AllocationGene>
+                {
+                    new AllocationGene
+                    {
+                        PhaseId = 1,
+                        StartDate = new DateTime(2026, 6, 1),
+                        EndDate = new DateTime(2026, 6, 5),
+                        LandId = 10,
+                        AssignedHumanResourceIds = new List<int> { 20 }
+                    }
+                }
+            };
+
+            var result = calculator.Evaluate(chromosome, input);
+            Assert.True(result.IsFeasible);
+            Assert.Empty(result.ConstraintReport.LandConflicts);
+        }
+
         [Fact]
         public void Test14_SoftViolation_ConstraintReport()
         {

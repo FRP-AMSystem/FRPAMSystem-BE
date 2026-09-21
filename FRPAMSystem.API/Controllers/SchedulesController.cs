@@ -146,6 +146,64 @@ namespace FRPAMSystem_BE.Controllers
             });
         }
 
+        [HttpPatch("{id:int}/complete")]
+        [Authorize(Roles = "Seasonal,Technician,Researcher,Manager,Admin")]
+        public async Task<IActionResult> CompleteSchedule([FromRoute] int id, [FromBody] CompleteScheduleRequest? request)
+        {
+            var userId = GetCurrentUserId();
+            if (!userId.HasValue)
+            {
+                return Unauthorized(new { success = false, message = "Invalid user token" });
+            }
+
+            var result = await _scheduleService.CompleteScheduleAsync(id, userId.Value, request);
+
+            if (result == null)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "Schedule not found"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "Complete schedule successfully",
+                data = result
+            });
+        }
+
+        [HttpPatch("{id:int}/cancel")]
+        [Authorize(Roles = "Researcher,Manager,Admin")]
+        public async Task<IActionResult> CancelSchedule([FromRoute] int id, [FromBody] CancelScheduleRequest? request)
+        {
+            var userId = GetCurrentUserId();
+            if (!userId.HasValue)
+            {
+                return Unauthorized(new { success = false, message = "Invalid user token" });
+            }
+
+            var result = await _scheduleService.CancelScheduleAsync(id, userId.Value, request);
+
+            if (result == null)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "Schedule not found"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "Cancel schedule successfully",
+                data = result
+            });
+        }
+
         [HttpDelete("{id:int}")]
         [Authorize(Roles = "Admin,Manager")]
         public async Task<IActionResult> DeleteSchedule(int id)

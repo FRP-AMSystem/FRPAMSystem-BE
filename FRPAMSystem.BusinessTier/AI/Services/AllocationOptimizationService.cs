@@ -1,5 +1,6 @@
 using FRPAMSystem.BusinessTier.AI.DTO;
 using FRPAMSystem.BusinessTier.AI.Models;
+using FRPAMSystem.BusinessTier.Enums;
 using FRPAMSystem.DataTier.Models;
 using FRPAMSystem.DataTier.Repository.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -95,21 +96,51 @@ namespace FRPAMSystem.BusinessTier.AI.Services
                 .AsNoTracking()
                 .ToListAsync();
 
+            var cancelledDetailStatus = AllocationDetailStatus.Cancelled.ToString();
+            var completedDetailStatus = AllocationDetailStatus.Completed.ToString();
+            var rejectedPlanStatus = AllocationPlanStatus.Rejected.ToString();
+            var cancelledPlanStatus = AllocationPlanStatus.Cancelled.ToString();
+            var cancelledScheduleStatus = ScheduleStatus.Cancelled.ToString();
+            var completedScheduleStatus = ScheduleStatus.Completed.ToString();
+
             var landAllocations = await _unitOfWork
                 .GetRepository<AllocationLandDetail>()
                 .GetQueryable()
+                .Include(a => a.AllocationPlan)
+                .Where(a => a.Status != cancelledDetailStatus &&
+                            a.Status != completedDetailStatus &&
+                            (a.AllocationPlan == null || (a.AllocationPlan.ApproveStatus != rejectedPlanStatus &&
+                                                          a.AllocationPlan.ApproveStatus != cancelledPlanStatus)))
                 .AsNoTracking()
                 .ToListAsync();
 
             var humanAllocations = await _unitOfWork
                 .GetRepository<AllocationHumanDetail>()
                 .GetQueryable()
+                .Include(a => a.AllocationPlan)
+                .Where(a => a.Status != cancelledDetailStatus &&
+                            a.Status != completedDetailStatus &&
+                            (a.AllocationPlan == null || (a.AllocationPlan.ApproveStatus != rejectedPlanStatus &&
+                                                          a.AllocationPlan.ApproveStatus != cancelledPlanStatus)))
                 .AsNoTracking()
                 .ToListAsync();
 
             var equipmentAllocations = await _unitOfWork
                 .GetRepository<AllocationEquipmentDetail>()
                 .GetQueryable()
+                .Include(a => a.AllocationPlan)
+                .Where(a => a.Status != cancelledDetailStatus &&
+                            a.Status != completedDetailStatus &&
+                            (a.AllocationPlan == null || (a.AllocationPlan.ApproveStatus != rejectedPlanStatus &&
+                                                          a.AllocationPlan.ApproveStatus != cancelledPlanStatus)))
+                .AsNoTracking()
+                .ToListAsync();
+
+            var schedules = await _unitOfWork
+                .GetRepository<Schedule>()
+                .GetQueryable()
+                .Where(s => s.Status != cancelledScheduleStatus &&
+                            s.Status != completedScheduleStatus)
                 .AsNoTracking()
                 .ToListAsync();
 
@@ -135,6 +166,7 @@ namespace FRPAMSystem.BusinessTier.AI.Services
                 ExistingLandAllocations = landAllocations,
                 ExistingHumanAllocations = humanAllocations,
                 ExistingEquipmentAllocations = equipmentAllocations,
+                ExistingSchedules = schedules,
                 EquipmentSubstitutions = substitutions,
                 Settings = settings?.Clone() ?? new OptimizationSettings()
             };
