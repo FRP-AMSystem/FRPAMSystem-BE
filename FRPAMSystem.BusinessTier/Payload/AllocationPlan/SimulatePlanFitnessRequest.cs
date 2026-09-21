@@ -15,8 +15,6 @@ namespace FRPAMSystem.BusinessTier.Payload.AllocationPlan
         public List<SimulateEquipmentDetailItem> EquipmentDetails { get; set; } = new();
 
         public List<SimulateHumanDetailItem> HumanDetails { get; set; } = new();
-
-        public List<SimulateScheduleItem> Schedules { get; set; } = new();
     }
 
     public class SimulateLandDetailItem
@@ -68,18 +66,5 @@ namespace FRPAMSystem.BusinessTier.Payload.AllocationPlan
         public DateTime? StartDate { get; set; }
 
         public DateTime? EndDate { get; set; }
-    }
-
-    public class SimulateScheduleItem
-    {
-        public string Title { get; set; } = string.Empty;
-
-        public int? PhaseId { get; set; }
-
-        public DateTime StartDate { get; set; }
-
-        public DateTime EndDate { get; set; }
-
-        public int? AssignedHumanResourceId { get; set; }
     }
 }
