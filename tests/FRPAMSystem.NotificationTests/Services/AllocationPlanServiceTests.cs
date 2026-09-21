@@ -61,7 +61,6 @@ namespace FRPAMSystem.NotificationTests.Services
             var request = new AllocationPlanRequest
             {
                 ExperimentId = 5,
-                FitnessScore = 85.5,
                 ApproveStatus = AllocationPlanStatus.Draft
             };
             int creatorUserId = 10;
