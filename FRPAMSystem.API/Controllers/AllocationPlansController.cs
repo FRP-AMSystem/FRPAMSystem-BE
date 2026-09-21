@@ -75,6 +75,38 @@ namespace FRPAMSystem_BE.Controllers
             });
         }
 
+        [HttpPost("with-details")]
+        [Authorize(Roles = "Admin,Manager,Researcher")]
+        public async Task<IActionResult> CreateAllocationPlanWithDetails(
+            [FromBody] CreateAllocationPlanWithDetailsRequest request)
+        {
+            var result = await _allocationPlanService
+                .CreateAllocationPlanWithDetailsAsync(request, GetCurrentUserId());
+
+            return Ok(new
+            {
+                success = true,
+                message = "Create allocation plan with details successfully",
+                data = result
+            });
+        }
+
+        [HttpPost("simulate-fitness")]
+        [Authorize(Roles = "Admin,Manager,Researcher")]
+        public async Task<IActionResult> SimulatePlanFitness(
+            [FromBody] SimulatePlanFitnessRequest request)
+        {
+            var result = await _allocationPlanService
+                .SimulatePlanFitnessAsync(request);
+
+            return Ok(new
+            {
+                success = true,
+                message = "Simulate plan fitness successfully",
+                data = result
+            });
+        }
+
         [HttpPut("{id:int}")]
         [Authorize(Roles = "Admin,Manager,Researcher")]
         public async Task<IActionResult> UpdateAllocationPlan(

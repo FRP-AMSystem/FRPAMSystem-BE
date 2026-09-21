@@ -226,7 +226,8 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                     include: query => query
                         .Include(d => d.AllocationPlan)
                             .ThenInclude(p => p.Experiment)
-                        .Include(d => d.EquipmentInstance),
+                        .Include(d => d.EquipmentInstance)
+                        .Include(d => d.AllocatedEquipmentType),
                     asNoTracking: false
                 );
 
@@ -239,6 +240,13 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             {
                 throw new Exception(
                     "Equipment must be in Reserved or Allocated status before handover.");
+            }
+
+            if (detail.AllocatedEquipmentType?.TrackingType == EquipmentTrackingType.Individual.ToString() &&
+                !detail.EquipmentInstanceId.HasValue)
+            {
+                throw new Exception(
+                    "Individual-tracked equipment must have a specific equipment instance assigned before handover.");
             }
 
             detail.Status = AllocationDetailStatus.InUse.ToString();
@@ -955,6 +963,139 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             public bool AllowSubstitute { get; set; }
 
             public double? MinAcceptableEfficiency { get; set; }
+        }
+
+        public async Task<List<AvailableEquipmentSubstituteResponse>> GetAvailableSubstitutesAsync(
+            AvailableEquipmentSubstituteFilter filter)
+        {
+            if (filter.StartDate >= filter.EndDate)
+            {
+                throw new Exception("StartDate must be earlier than EndDate.");
+            }
+
+            var cancelledDetailStatus = AllocationDetailStatus.Cancelled.ToString();
+            var completedDetailStatus = AllocationDetailStatus.Completed.ToString();
+            var rejectedPlanStatus = AllocationPlanStatus.Rejected.ToString();
+            var cancelledPlanStatus = AllocationPlanStatus.Cancelled.ToString();
+
+            // 1. Get all conflicting equipment instance IDs in this time window
+            var conflictingInstanceIds = await _unitOfWork
+                .GetRepository<AllocationEquipmentDetail>()
+                .GetQueryable()
+                .Include(d => d.AllocationPlan)
+                .Where(d => d.EquipmentInstanceId.HasValue &&
+                            (!filter.CurrentAllocationDetailId.HasValue ||
+                             d.AllocationEquipmentDetailId != filter.CurrentAllocationDetailId.Value) &&
+                            d.Status != cancelledDetailStatus &&
+                            d.Status != completedDetailStatus &&
+                            (d.AllocationPlan == null || (d.AllocationPlan.ApproveStatus != rejectedPlanStatus &&
+                                                          d.AllocationPlan.ApproveStatus != cancelledPlanStatus)) &&
+                            d.StartDate < filter.EndDate &&
+                            filter.StartDate < d.EndDate)
+                .Select(d => d.EquipmentInstanceId!.Value)
+                .Distinct()
+                .ToListAsync();
+
+            var conflictingSet = conflictingInstanceIds.ToHashSet();
+
+            var results = new List<AvailableEquipmentSubstituteResponse>();
+
+            // 2. Query primary equipment type if requested
+            if (filter.IncludePrimary)
+            {
+                var primaryInstances = await _unitOfWork
+                    .GetRepository<EquipmentInstance>()
+                    .GetQueryable()
+                    .Include(e => e.EquipmentType)
+                    .Where(e => e.EquipmentTypeId == filter.EquipmentTypeId &&
+                                (e.Status == EquipmentInstanceStatus.Available.ToString() ||
+                                 e.Status == "Available" || e.Status == "Active") &&
+                                !conflictingSet.Contains(e.EquipmentInstanceId))
+                    .AsNoTracking()
+                    .ToListAsync();
+
+                foreach (var inst in primaryInstances)
+                {
+                    double? remainingHours = null;
+                    if (inst.EquipmentType?.BaseMaintenanceIntervalHours != null)
+                    {
+                        var interval = inst.EquipmentType.BaseMaintenanceIntervalHours.Value;
+                        remainingHours = Math.Max(0d, interval - inst.UsageHoursSinceLastMaintenance);
+                    }
+
+                    results.Add(new AvailableEquipmentSubstituteResponse
+                    {
+                        EquipmentInstanceId = inst.EquipmentInstanceId,
+                        AssetCode = inst.AssetCode,
+                        EquipmentTypeId = inst.EquipmentTypeId,
+                        EquipmentTypeName = inst.EquipmentType?.Name ?? string.Empty,
+                        IsSubstitute = false,
+                        EfficiencyRate = 1.0d,
+                        TimeMultiplier = 1.0d,
+                        ConditionLevel = inst.ConditionLevel,
+                        Status = inst.Status,
+                        RemainingMaintenanceHours = remainingHours,
+                        Reason = "Primary equipment instance available and conflict-free."
+                    });
+                }
+            }
+
+            // 3. Query substitutes from EquipmentSubstitution
+            var substitutions = await _unitOfWork
+                .GetRepository<EquipmentSubstitution>()
+                .GetQueryable()
+                .Include(s => s.SubEquipmentType)
+                .Where(s => s.PrimaryEquipmentTypeId == filter.EquipmentTypeId &&
+                            (!filter.MinAcceptableEfficiency.HasValue ||
+                             s.EfficiencyRate >= filter.MinAcceptableEfficiency.Value))
+                .OrderByDescending(s => s.EfficiencyRate)
+                .AsNoTracking()
+                .ToListAsync();
+
+            foreach (var sub in substitutions)
+            {
+                var subInstances = await _unitOfWork
+                    .GetRepository<EquipmentInstance>()
+                    .GetQueryable()
+                    .Include(e => e.EquipmentType)
+                    .Where(e => e.EquipmentTypeId == sub.SubEquipmentTypeId &&
+                                (e.Status == EquipmentInstanceStatus.Available.ToString() ||
+                                 e.Status == "Available" || e.Status == "Active") &&
+                                !conflictingSet.Contains(e.EquipmentInstanceId))
+                    .AsNoTracking()
+                    .ToListAsync();
+
+                foreach (var inst in subInstances)
+                {
+                    double? remainingHours = null;
+                    if (inst.EquipmentType?.BaseMaintenanceIntervalHours != null)
+                    {
+                        var interval = inst.EquipmentType.BaseMaintenanceIntervalHours.Value;
+                        remainingHours = Math.Max(0d, interval - inst.UsageHoursSinceLastMaintenance);
+                    }
+
+                    results.Add(new AvailableEquipmentSubstituteResponse
+                    {
+                        EquipmentInstanceId = inst.EquipmentInstanceId,
+                        AssetCode = inst.AssetCode,
+                        EquipmentTypeId = inst.EquipmentTypeId,
+                        EquipmentTypeName = inst.EquipmentType?.Name ?? sub.SubEquipmentType?.Name ?? string.Empty,
+                        IsSubstitute = true,
+                        EfficiencyRate = sub.EfficiencyRate,
+                        TimeMultiplier = sub.TimeMultiplier,
+                        ConditionLevel = inst.ConditionLevel,
+                        Status = inst.Status,
+                        RemainingMaintenanceHours = remainingHours,
+                        Reason = $"Valid substitute equipment with {sub.EfficiencyRate:P0} efficiency."
+                    });
+                }
+            }
+
+            return results
+                .OrderBy(r => r.IsSubstitute)
+                .ThenByDescending(r => r.EfficiencyRate)
+                .ThenBy(r => r.AssetCode)
+                .ToList();
         }
     }
 }

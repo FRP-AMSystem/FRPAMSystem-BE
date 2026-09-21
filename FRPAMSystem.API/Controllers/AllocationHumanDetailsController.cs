@@ -1,4 +1,4 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.Payload.AllocationHumanDetail;
 using FRPAMSystem.BusinessTier.Services.Interface;
@@ -18,6 +18,21 @@ namespace FRPAMSystem_BE.Controllers
             IAllocationHumanDetailService allocationHumanDetailService)
         {
             _allocationHumanDetailService = allocationHumanDetailService;
+        }
+
+        [HttpGet("available-humans")]
+        public async Task<IActionResult> GetAvailableHumans(
+            [FromQuery] AvailableHumanFilter filter)
+        {
+            var result = await _allocationHumanDetailService
+                .GetAvailableHumansAsync(filter);
+
+            return Ok(new
+            {
+                success = true,
+                message = "Get available human resources successfully",
+                data = result
+            });
         }
 
         /// <summary>

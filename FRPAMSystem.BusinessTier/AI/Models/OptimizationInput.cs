@@ -26,13 +26,15 @@ namespace FRPAMSystem.BusinessTier.AI.Models
 
         public IReadOnlyCollection<PhaseEquipmentRequirement> PhaseEquipmentRequirements { get; set; } = Array.Empty<PhaseEquipmentRequirement>();
 
-        public IReadOnlyCollection<Schedule> ExistingSchedules { get; set; } = Array.Empty<Schedule>();
+
 
         public IReadOnlyCollection<AllocationLandDetail> ExistingLandAllocations { get; set; } = Array.Empty<AllocationLandDetail>();
 
         public IReadOnlyCollection<AllocationHumanDetail> ExistingHumanAllocations { get; set; } = Array.Empty<AllocationHumanDetail>();
 
         public IReadOnlyCollection<AllocationEquipmentDetail> ExistingEquipmentAllocations { get; set; } = Array.Empty<AllocationEquipmentDetail>();
+
+        public IReadOnlyCollection<Schedule> ExistingSchedules { get; set; } = Array.Empty<Schedule>();
 
         public IReadOnlyCollection<EquipmentSubstitution> EquipmentSubstitutions { get; set; } = Array.Empty<EquipmentSubstitution>();
 

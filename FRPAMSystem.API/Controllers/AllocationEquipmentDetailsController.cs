@@ -1,4 +1,4 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.Payload.AllocationEquipmentDetail;
 using FRPAMSystem.BusinessTier.Services.Interface;
@@ -18,6 +18,21 @@ namespace FRPAMSystem_BE.Controllers
             IAllocationEquipmentDetailService allocationEquipmentDetailService)
         {
             _allocationEquipmentDetailService = allocationEquipmentDetailService;
+        }
+
+        [HttpGet("available-substitutes")]
+        public async Task<IActionResult> GetAvailableSubstitutes(
+            [FromQuery] AvailableEquipmentSubstituteFilter filter)
+        {
+            var result = await _allocationEquipmentDetailService
+                .GetAvailableSubstitutesAsync(filter);
+
+            return Ok(new
+            {
+                success = true,
+                message = "Get available equipment substitutes successfully",
+                data = result
+            });
         }
 
         /// <summary>

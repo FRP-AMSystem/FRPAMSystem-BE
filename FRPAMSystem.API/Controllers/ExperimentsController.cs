@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.Payload.Experiment;
 using FRPAMSystem.BusinessTier.Services.Interface;
@@ -157,6 +158,133 @@ namespace FRPAMSystem_BE.Controllers
                 message = "Update experiment status successfully",
                 data = result
             });
+        }
+
+        [HttpPost("{id:int}/approve")]
+        [Authorize(Roles = "Admin,Manager")]
+        public async Task<IActionResult> ApproveExperiment(int id)
+        {
+            var result = await _experimentService.ApproveExperimentAsync(id, GetCurrentUserId());
+
+            if (result == null)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "Experiment not found"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "Approve experiment successfully",
+                data = result
+            });
+        }
+
+        [HttpPost("{id:int}/reject")]
+        [Authorize(Roles = "Admin,Manager")]
+        public async Task<IActionResult> RejectExperiment(int id, [FromBody] RejectExperimentRequest? request)
+        {
+            var result = await _experimentService.RejectExperimentAsync(id, GetCurrentUserId(), request?.Reason);
+
+            if (result == null)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "Experiment not found"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "Reject experiment successfully",
+                data = result
+            });
+        }
+
+        [HttpPost("{id:int}/start")]
+        [Authorize(Roles = "Admin,Manager,Researcher")]
+        public async Task<IActionResult> StartExperiment(int id)
+        {
+            var result = await _experimentService.StartExperimentAsync(id, GetCurrentUserId());
+
+            if (result == null)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "Experiment not found"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "Start experiment successfully",
+                data = result
+            });
+        }
+
+        [HttpPost("{id:int}/complete")]
+        [Authorize(Roles = "Admin,Manager,Researcher")]
+        public async Task<IActionResult> CompleteExperiment(int id)
+        {
+            var result = await _experimentService.CompleteExperimentAsync(id, GetCurrentUserId());
+
+            if (result == null)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "Experiment not found"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "Complete experiment successfully",
+                data = result
+            });
+        }
+
+        [HttpPost("{id:int}/cancel")]
+        [Authorize(Roles = "Admin,Manager,Researcher")]
+        public async Task<IActionResult> CancelExperiment(int id, [FromBody] CancelExperimentRequest? request = null)
+        {
+            var result = await _experimentService.CancelExperimentAsync(id, GetCurrentUserId(), request?.Reason);
+
+            if (result == null)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "Experiment not found"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "Cancel experiment successfully",
+                data = result
+            });
+        }
+
+        private int? GetCurrentUserId()
+        {
+            var userIdValue = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (int.TryParse(userIdValue, out var userId))
+            {
+                return userId;
+            }
+
+            return null;
         }
     }
 }

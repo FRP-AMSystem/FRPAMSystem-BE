@@ -13,6 +13,14 @@ namespace FRPAMSystem.BusinessTier.Constants
         public const string AllocationPlanRejected = "AllocationPlanRejected";
         public const string ConflictDetected = "ConflictDetected";
         public const string ScheduleAssigned = "ScheduleAssigned";
+
+        public const string EquipmentHandoverPending = "EquipmentHandoverPending";
+        public const string EquipmentHandoverConfirmed = "EquipmentHandoverConfirmed";
+        public const string EquipmentHandoverRejected = "EquipmentHandoverRejected";
+
+        public const string EquipmentReturnPending = "EquipmentReturnPending";
+        public const string EquipmentReturnConfirmed = "EquipmentReturnConfirmed";
+        public const string EquipmentReturnRejected = "EquipmentReturnRejected";
     }
 
     public static class NotificationReferenceTypes
@@ -20,5 +28,7 @@ namespace FRPAMSystem.BusinessTier.Constants
         public const string AllocationPlan = "AllocationPlan";
         public const string Experiment = "Experiment";
         public const string Schedule = "Schedule";
+        public const string EquipmentHandover = "EquipmentHandover";
+        public const string EquipmentReturn = "EquipmentReturn";
     }
 }

@@ -1,4 +1,4 @@
-﻿using FRPAMSystem.BusinessTier.Constants;
+using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.Payload.AllocationEquipmentDetail;
 using FRPAMSystem.DataTier.Paginate;
 using System;
@@ -42,5 +42,8 @@ namespace FRPAMSystem.BusinessTier.Services.Interface
             AllocationEquipmentDetailRequest request);
 
         Task<bool> DeleteAllocationEquipmentDetailAsync(int id);
+
+        Task<List<AvailableEquipmentSubstituteResponse>> GetAvailableSubstitutesAsync(
+            AvailableEquipmentSubstituteFilter filter);
     }
 }
