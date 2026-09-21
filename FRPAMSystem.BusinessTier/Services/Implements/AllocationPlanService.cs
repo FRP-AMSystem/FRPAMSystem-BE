@@ -910,24 +910,55 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 .AsNoTracking()
                 .ToListAsync();
 
+            var cancelledDetailStatus = AllocationDetailStatus.Cancelled.ToString();
+            var completedDetailStatus = AllocationDetailStatus.Completed.ToString();
+            var rejectedPlanStatus = AllocationPlanStatus.Rejected.ToString();
+            var cancelledPlanStatus = AllocationPlanStatus.Cancelled.ToString();
+            var cancelledScheduleStatus = ScheduleStatus.Cancelled.ToString();
+            var completedScheduleStatus = ScheduleStatus.Completed.ToString();
+
             var landAllocations = await _unitOfWork
                 .GetRepository<AllocationLandDetail>()
                 .GetQueryable()
-                .Where(a => currentPlanId == null || a.AllocationPlanId != currentPlanId.Value)
+                .Include(a => a.AllocationPlan)
+                .Where(a => (currentPlanId == null || a.AllocationPlanId != currentPlanId.Value) &&
+                            a.Status != cancelledDetailStatus &&
+                            a.Status != completedDetailStatus &&
+                            (a.AllocationPlan == null || (a.AllocationPlan.ApproveStatus != rejectedPlanStatus &&
+                                                          a.AllocationPlan.ApproveStatus != cancelledPlanStatus)))
                 .AsNoTracking()
                 .ToListAsync();
 
             var humanAllocations = await _unitOfWork
                 .GetRepository<AllocationHumanDetail>()
                 .GetQueryable()
-                .Where(a => currentPlanId == null || a.AllocationPlanId != currentPlanId.Value)
+                .Include(a => a.AllocationPlan)
+                .Where(a => (currentPlanId == null || a.AllocationPlanId != currentPlanId.Value) &&
+                            a.Status != cancelledDetailStatus &&
+                            a.Status != completedDetailStatus &&
+                            (a.AllocationPlan == null || (a.AllocationPlan.ApproveStatus != rejectedPlanStatus &&
+                                                          a.AllocationPlan.ApproveStatus != cancelledPlanStatus)))
                 .AsNoTracking()
                 .ToListAsync();
 
             var equipmentAllocations = await _unitOfWork
                 .GetRepository<AllocationEquipmentDetail>()
                 .GetQueryable()
-                .Where(a => currentPlanId == null || a.AllocationPlanId != currentPlanId.Value)
+                .Include(a => a.AllocationPlan)
+                .Where(a => (currentPlanId == null || a.AllocationPlanId != currentPlanId.Value) &&
+                            a.Status != cancelledDetailStatus &&
+                            a.Status != completedDetailStatus &&
+                            (a.AllocationPlan == null || (a.AllocationPlan.ApproveStatus != rejectedPlanStatus &&
+                                                          a.AllocationPlan.ApproveStatus != cancelledPlanStatus)))
+                .AsNoTracking()
+                .ToListAsync();
+
+            var schedules = await _unitOfWork
+                .GetRepository<Schedule>()
+                .GetQueryable()
+                .Where(s => (currentPlanId == null || s.AllocationPlanId != currentPlanId.Value) &&
+                            s.Status != cancelledScheduleStatus &&
+                            s.Status != completedScheduleStatus)
                 .AsNoTracking()
                 .ToListAsync();
 
@@ -953,6 +984,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 ExistingLandAllocations = landAllocations,
                 ExistingHumanAllocations = humanAllocations,
                 ExistingEquipmentAllocations = equipmentAllocations,
+                ExistingSchedules = schedules,
                 EquipmentSubstitutions = substitutions,
                 Settings = settings?.Clone() ?? new OptimizationSettings()
             };

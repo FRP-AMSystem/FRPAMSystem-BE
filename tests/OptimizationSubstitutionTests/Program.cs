@@ -38,7 +38,9 @@ var tests = new (string Name, Action Test)[]
     ("Penalty propagation: Default settings deduct penalty for constraint violations", TestDefaultSettingsPenaltyPropagation),
     ("Zero penalty: Explicit PenaltyWeight=0 produces PenaltyScore=0 but retains infeasibility", TestExplicitZeroPenaltyWeight),
     ("Valid substitution: Conforming substitute generates 0 constraint violations", TestValidSubstitution),
-    ("Invalid substitution: Disallowed substitution produces hard type mismatch", TestInvalidSubstitutionDisallowed)
+    ("Invalid substitution: Disallowed substitution produces hard type mismatch", TestInvalidSubstitutionDisallowed),
+    ("Human schedule: Overlapping schedule creates hard violation and infeasibility", TestHumanScheduleConflictGeneratesHardViolation),
+    ("Human schedule: Non-overlapping schedule generates no conflict", TestHumanScheduleNonOverlappingNoConflict)
 };
 
 var passed = 0;
@@ -1265,6 +1267,64 @@ static void TestInvalidSubstitutionDisallowed()
 
     Assert(result.Violations.Any(v => v.Severity == ConstraintSeverity.Hard && v.Message.Contains("does not match required type")),
         "Disallowed substitution must produce a hard type mismatch violation.");
+}
+
+static void TestHumanScheduleConflictGeneratesHardViolation()
+{
+    var input = CreateComprehensiveOptimizationInput();
+    input.ExistingSchedules = new[]
+    {
+        new Schedule
+        {
+            ScheduleId = 501,
+            AllocationPlanId = 999,
+            AssignedHumanResourceId = 1,
+            StartDate = new DateTime(2026, 1, 2),
+            EndDate = new DateTime(2026, 1, 8),
+            Status = "InProgress",
+            Title = "Field Survey"
+        }
+    };
+
+    var plan = CreateValidManualPlan();
+    var mapper = new AllocationPlanChromosomeMapper();
+    var chromosome = mapper.MapToChromosome(plan, input);
+
+    var calculator = CreateFitnessCalculator();
+    var result = calculator.Evaluate(chromosome, input);
+
+    Assert(result.HardViolationCount > 0, "Expected hard violation count > 0 when human has schedule conflict.");
+    Assert(!chromosome.IsFeasible, "Chromosome must be infeasible when human has schedule conflict.");
+    Assert(result.ConstraintReport.HumanConflicts.Any(c => c.Contains("schedule conflict")),
+        "Expected HumanConflicts to report schedule conflict.");
+}
+
+static void TestHumanScheduleNonOverlappingNoConflict()
+{
+    var input = CreateComprehensiveOptimizationInput();
+    input.ExistingSchedules = new[]
+    {
+        new Schedule
+        {
+            ScheduleId = 502,
+            AllocationPlanId = 999,
+            AssignedHumanResourceId = 1,
+            StartDate = new DateTime(2026, 2, 1),
+            EndDate = new DateTime(2026, 2, 10),
+            Status = "Planned",
+            Title = "Future Task"
+        }
+    };
+
+    var plan = CreateValidManualPlan();
+    var mapper = new AllocationPlanChromosomeMapper();
+    var chromosome = mapper.MapToChromosome(plan, input);
+
+    var calculator = CreateFitnessCalculator();
+    var result = calculator.Evaluate(chromosome, input);
+
+    Assert(!result.ConstraintReport.HumanConflicts.Any(c => c.Contains("schedule conflict")),
+        "Non-overlapping schedule should not create any schedule conflict.");
 }
 
 static void Assert(bool condition, string message)

@@ -316,6 +316,11 @@ namespace FRPAMSystem.BusinessTier.AI.Generator
                 score += 30d;
             }
 
+            if (!input.ExistingSchedules.Any(s => s.AssignedHumanResourceId == human.HumanResourceId && Overlaps(startDate, endDate, s.StartDate, s.EndDate)))
+            {
+                score += 30d;
+            }
+
             score += Math.Max(0d, 20d - human.CurrentWorkload);
             return score;
         }
