@@ -96,6 +96,12 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness.Evaluators
                     {
                         Add(result, "Human", ConstraintSeverity.Hard, $"Human resource {human.HumanResourceId} is double-booked.");
                     }
+                    if (input.ExistingSchedules.Any(s =>
+                            s.AssignedHumanResourceId == human.HumanResourceId &&
+                            FitnessEvaluationHelper.Overlaps(gene.StartDate, gene.EndDate, s.StartDate, s.EndDate)))
+                    {
+                        Add(result, "Human", ConstraintSeverity.Hard, $"Human resource {human.HumanResourceId} has a schedule conflict.");
+                    }
                 }
 
                 var internalOverlaps = FitnessEvaluationHelper.CountInternalOverlaps(

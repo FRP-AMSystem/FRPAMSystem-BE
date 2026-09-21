@@ -643,10 +643,15 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                     "Human resource workload exceeds max working hours per day in the selected time range.");
             }
 
+            var cancelledScheduleStatus = ScheduleStatus.Cancelled.ToString();
+            var completedScheduleStatus = ScheduleStatus.Completed.ToString();
+
             var scheduleConflict = await _unitOfWork
                 .GetRepository<Schedule>()
                 .AnyAsync(s =>
                     s.AssignedHumanResourceId == humanResource.HumanResourceId &&
+                    s.Status != cancelledScheduleStatus &&
+                    s.Status != completedScheduleStatus &&
                     s.StartDate < endDate &&
                     startDate < s.EndDate);
 
