@@ -1076,17 +1076,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                     StartDate = hd.StartDate ?? input.Experiment.ExpectStartDate,
                     EndDate = hd.EndDate ?? input.Experiment.ExpectEndDate,
                     Status = AllocationDetailStatus.Proposed.ToString()
-                }).ToList() ?? new List<AllocationHumanDetail>(),
-
-                Schedules = request.Schedules?.Select(sc => new Schedule
-                {
-                    Title = sc.Title,
-                    PhaseId = sc.PhaseId,
-                    StartDate = sc.StartDate,
-                    EndDate = sc.EndDate,
-                    AssignedHumanResourceId = sc.AssignedHumanResourceId,
-                    Status = ScheduleStatus.Planned.ToString()
-                }).ToList() ?? new List<Schedule>()
+                }).ToList() ?? new List<AllocationHumanDetail>()
             };
 
             var chromosome = _chromosomeMapper.MapToChromosome(mockPlan, input);
@@ -1244,29 +1234,6 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                         Status = huReq.Status.ToString()
                     };
                     await _unitOfWork.GetRepository<AllocationHumanDetail>().InsertAsync(huDetail);
-                }
-            }
-
-            // Insert Schedules
-            if (request.Schedules != null && request.Schedules.Count > 0)
-            {
-                foreach (var scReq in request.Schedules)
-                {
-                    var schedule = new Schedule
-                    {
-                        AllocationPlanId = planId,
-                        PhaseId = scReq.PhaseId,
-                        Title = scReq.Title,
-                        Description = scReq.Description,
-                        StartDate = scReq.StartDate,
-                        EndDate = scReq.EndDate,
-                        Status = scReq.Status.ToString(),
-                        CreatedBy = currentUserId ?? scReq.CreatedBy,
-                        AssignedHumanResourceId = scReq.AssignedHumanResourceId,
-                        Notes = scReq.Notes,
-                        Priority = scReq.Priority
-                    };
-                    await _unitOfWork.GetRepository<Schedule>().InsertAsync(schedule);
                 }
             }
 
