@@ -2,7 +2,6 @@ using FRPAMSystem.BusinessTier.Enums;
 using FRPAMSystem.BusinessTier.Payload.AllocationEquipmentDetail;
 using FRPAMSystem.BusinessTier.Payload.AllocationHumanDetail;
 using FRPAMSystem.BusinessTier.Payload.AllocationLandDetail;
-using FRPAMSystem.BusinessTier.Payload.Schedule;
 using System.Collections.Generic;
 
 namespace FRPAMSystem.BusinessTier.Payload.AllocationPlan
@@ -18,7 +17,5 @@ namespace FRPAMSystem.BusinessTier.Payload.AllocationPlan
         public List<AllocationEquipmentDetailRequest> EquipmentDetails { get; set; } = new();
 
         public List<AllocationHumanDetailRequest> HumanDetails { get; set; } = new();
-
-        public List<ScheduleRequest> Schedules { get; set; } = new();
     }
 }
