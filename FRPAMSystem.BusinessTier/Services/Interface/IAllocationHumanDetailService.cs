@@ -1,4 +1,4 @@
-﻿using FRPAMSystem.BusinessTier.Constants;
+using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.Payload.AllocationHumanDetail;
 using FRPAMSystem.DataTier.Paginate;
 using System;
@@ -34,5 +34,8 @@ namespace FRPAMSystem.BusinessTier.Services.Interface
             AllocationHumanDetailRequest request);
 
         Task<bool> DeleteAllocationHumanDetailAsync(int id);
+
+        Task<List<AvailableHumanResponse>> GetAvailableHumansAsync(
+            AvailableHumanFilter filter);
     }
 }

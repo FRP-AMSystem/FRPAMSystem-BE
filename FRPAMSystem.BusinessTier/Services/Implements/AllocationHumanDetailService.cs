@@ -681,5 +681,122 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
 
             public double? RequiredWorkingHoursPerDay { get; set; }
         }
+
+        public async Task<List<AvailableHumanResponse>> GetAvailableHumansAsync(
+            AvailableHumanFilter filter)
+        {
+            if (filter.StartDate >= filter.EndDate)
+            {
+                throw new Exception("StartDate must be earlier than EndDate.");
+            }
+
+            var cancelledDetailStatus = AllocationDetailStatus.Cancelled.ToString();
+            var completedDetailStatus = AllocationDetailStatus.Completed.ToString();
+            var rejectedPlanStatus = AllocationPlanStatus.Rejected.ToString();
+            var cancelledPlanStatus = AllocationPlanStatus.Cancelled.ToString();
+            var cancelledScheduleStatus = ScheduleStatus.Cancelled.ToString();
+            var completedScheduleStatus = ScheduleStatus.Completed.ToString();
+
+            // 1. Get staff with schedule conflict in this window
+            var conflictingStaffIdsFromSchedule = await _unitOfWork
+                .GetRepository<Schedule>()
+                .GetQueryable()
+                .Where(s => s.AssignedHumanResourceId.HasValue &&
+                            s.Status != cancelledScheduleStatus &&
+                            s.Status != completedScheduleStatus &&
+                            s.StartDate < filter.EndDate &&
+                            filter.StartDate < s.EndDate)
+                .Select(s => s.AssignedHumanResourceId!.Value)
+                .Distinct()
+                .ToListAsync();
+
+            var scheduleConflictSet = conflictingStaffIdsFromSchedule.ToHashSet();
+
+            // 2. Query candidates by role
+            var candidates = await _unitOfWork
+                .GetRepository<HumanResourceProfile>()
+                .GetQueryable()
+                .Include(h => h.User)
+                    .ThenInclude(u => u!.Role)
+                .Include(h => h.HumanResourceSkills)
+                    .ThenInclude(s => s.Skill)
+                .Where(h => h.User != null &&
+                            h.User.RoleId == filter.RoleId &&
+                            (h.Status == "Available" || h.Status == "Active") &&
+                            !scheduleConflictSet.Contains(h.HumanResourceId))
+                .AsNoTracking()
+                .ToListAsync();
+
+            // 3. Check workload capacity in the time window
+            var candidateIds = candidates.Select(c => c.HumanResourceId).ToList();
+
+            var activeAllocations = await _unitOfWork
+                .GetRepository<AllocationHumanDetail>()
+                .GetQueryable()
+                .Include(d => d.AllocationPlan)
+                .Where(d => candidateIds.Contains(d.HumanResourceId) &&
+                            (!filter.CurrentAllocationDetailId.HasValue ||
+                             d.AllocationHumanDetailId != filter.CurrentAllocationDetailId.Value) &&
+                            d.Status != cancelledDetailStatus &&
+                            d.Status != completedDetailStatus &&
+                            (d.AllocationPlan == null || (d.AllocationPlan.ApproveStatus != rejectedPlanStatus &&
+                                                          d.AllocationPlan.ApproveStatus != cancelledPlanStatus)) &&
+                            d.StartDate < filter.EndDate &&
+                            filter.StartDate < d.EndDate)
+                .Select(d => new { d.HumanResourceId, d.WorkingHours })
+                .AsNoTracking()
+                .ToListAsync();
+
+            var workloadMap = activeAllocations
+                .GroupBy(a => a.HumanResourceId)
+                .ToDictionary(g => g.Key, g => g.Sum(x => x.WorkingHours));
+
+            var results = new List<AvailableHumanResponse>();
+
+            foreach (var candidate in candidates)
+            {
+                var currentOverlappedHours = workloadMap.TryGetValue(candidate.HumanResourceId, out var hours) ? hours : 0d;
+                var remainingCapacity = candidate.MaxWorkingHoursPerDay - currentOverlappedHours;
+
+                if (remainingCapacity < filter.RequestedHoursPerDay)
+                {
+                    continue; // Exceeds daily working limit in this window
+                }
+
+                var hasSkill = filter.RequiredSkillId == null ||
+                               candidate.HumanResourceSkills.Any(s => s.SkillId == filter.RequiredSkillId.Value);
+
+                var skillNames = candidate.HumanResourceSkills
+                    .Select(s => s.Skill?.SkillName ?? string.Empty)
+                    .Where(s => !string.IsNullOrEmpty(s))
+                    .ToList();
+
+                var matchReason = hasSkill
+                    ? (filter.RequiredSkillId.HasValue
+                        ? "Role and required skill matched, workload capacity available."
+                        : "Role matched, workload capacity available.")
+                    : "Role matched; required skill not held.";
+
+                results.Add(new AvailableHumanResponse
+                {
+                    HumanResourceId = candidate.HumanResourceId,
+                    UserId = candidate.UserId,
+                    FullName = candidate.User?.FullName ?? string.Empty,
+                    RoleName = candidate.User?.Role?.RoleName,
+                    HasRequiredSkill = hasSkill,
+                    Skills = skillNames,
+                    MaxWorkingHoursPerDay = candidate.MaxWorkingHoursPerDay,
+                    CurrentWorkload = Math.Round(currentOverlappedHours, 2),
+                    AvailableHoursPerDay = Math.Round(remainingCapacity, 2),
+                    MatchReason = matchReason
+                });
+            }
+
+            return results
+                .OrderByDescending(r => r.HasRequiredSkill)
+                .ThenBy(r => r.CurrentWorkload)
+                .ThenBy(r => r.FullName)
+                .ToList();
+        }
     }
 }
