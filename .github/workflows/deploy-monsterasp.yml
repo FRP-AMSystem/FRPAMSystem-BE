@@ -28,6 +28,22 @@ jobs:
       - name: Publish
         run: dotnet publish FRPAMSystem.API/FRPAMSystem.API.csproj --configuration Release --output publish
 
+      - name: Inject production secrets into published appsettings
+        env:
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          DEFAULT_CONNECTION: ${{ secrets.DEFAULT_CONNECTION }}
+        run: |
+          $path = "publish/appsettings.json"
+          $json = Get-Content $path -Raw | ConvertFrom-Json
+          if (-not [string]::IsNullOrWhiteSpace($env:DEFAULT_CONNECTION)) {
+            $json.ConnectionStrings.DefaultConnection = $env:DEFAULT_CONNECTION
+          }
+          if (-not [string]::IsNullOrWhiteSpace($env:EMAIL_PASSWORD)) {
+            $json.Email.Password = $env:EMAIL_PASSWORD
+          }
+          $out = $json | ConvertTo-Json -Depth 20
+          [System.IO.File]::WriteAllText((Resolve-Path $path), $out)
+
       - name: Deploy to MonsterASP.NET via WebDeploy
         uses: rasmusbuchholdt/simply-web-deploy@2.1.0
         with:
