@@ -115,10 +115,25 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             message.From.Add(new MailboxAddress(_settings.SenderName, _settings.SenderEmail));
             message.To.Add(new MailboxAddress(request.ToName ?? request.ToEmail, request.ToEmail));
             message.Subject = request.Subject.Trim();
-            message.Body = new TextPart("plain")
+
+            if (request.IsHtml)
             {
-                Text = request.Body.Trim()
-            };
+                var builder = new BodyBuilder
+                {
+                    HtmlBody = request.Body,
+                    TextBody = string.IsNullOrWhiteSpace(request.PlainTextBody)
+                        ? request.Subject.Trim()
+                        : request.PlainTextBody.Trim()
+                };
+                message.Body = builder.ToMessageBody();
+            }
+            else
+            {
+                message.Body = new TextPart("plain")
+                {
+                    Text = request.Body.Trim()
+                };
+            }
 
             return message;
         }
