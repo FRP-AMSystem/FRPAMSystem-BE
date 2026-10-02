@@ -1,4 +1,5 @@
 using FRPAMSystem.BusinessTier.Constants;
+using FRPAMSystem.BusinessTier.Emails;
 using FRPAMSystem.BusinessTier.Payload.Email;
 using FRPAMSystem.BusinessTier.Payload.Notification;
 using FRPAMSystem.BusinessTier.Services.Interface;
@@ -17,6 +18,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly IEmailService _emailService;
+        private readonly IEmailTemplateRenderer _emailTemplateRenderer;
         private readonly IHubContext<NotificationHub, INotificationClient> _notificationHub;
         private readonly ILogger<NotificationService> _logger;
         private readonly IClock _clock;
@@ -24,12 +26,14 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
         public NotificationService(
             IUnitOfWork unitOfWork,
             IEmailService emailService,
+            IEmailTemplateRenderer emailTemplateRenderer,
             IHubContext<NotificationHub, INotificationClient> notificationHub,
             ILogger<NotificationService> logger,
             IClock clock)
         {
             _unitOfWork = unitOfWork;
             _emailService = emailService;
+            _emailTemplateRenderer = emailTemplateRenderer;
             _notificationHub = notificationHub;
             _logger = logger;
             _clock = clock;
@@ -63,7 +67,13 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 request.ReferenceId);
 
             await _unitOfWork.GetRepository<Notification>().InsertAsync(notification);
-            await TrySendEmailAsync(user, request.Title, request.Message);
+            await TrySendEmailAsync(
+                user,
+                request.Title,
+                request.Message,
+                request.NotificationType,
+                request.ReferenceType,
+                request.ReferenceId);
             await _unitOfWork.CommitAsync();
 
             var response = MapToResponse(notification);
@@ -121,7 +131,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                     request.ReferenceId);
 
                 await repository.InsertAsync(notification);
-                await TrySendEmailAsync(users[userId], request.Title, request.Message);
+                await TrySendEmailAsync(users[userId], request.Title, request.Message, request.NotificationType, request.ReferenceType, request.ReferenceId);
                 results.Add(MapToResponse(notification));
             }
 
@@ -287,7 +297,13 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             return user;
         }
 
-        private async Task TrySendEmailAsync(User user, string title, string message)
+        private async Task TrySendEmailAsync(
+            User user,
+            string title,
+            string message,
+            string notificationType,
+            string? referenceType,
+            int? referenceId)
         {
             if (string.IsNullOrWhiteSpace(user.Email))
             {
@@ -299,12 +315,24 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
 
             try
             {
+                var html = _emailTemplateRenderer.RenderHtml(new EmailTemplateModel
+                {
+                    FullName = user.FullName,
+                    Title = title,
+                    Message = message,
+                    NotificationType = notificationType,
+                    ReferenceType = referenceType,
+                    ReferenceId = referenceId
+                });
+
                 await _emailService.SendAsync(new SendEmailRequest
                 {
                     ToEmail = user.Email,
                     ToName = user.FullName,
                     Subject = title,
-                    Body = message
+                    Body = html,
+                    IsHtml = true,
+                    PlainTextBody = message
                 });
             }
             catch (Exception ex)

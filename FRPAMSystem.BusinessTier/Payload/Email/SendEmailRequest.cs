@@ -9,5 +9,9 @@ namespace FRPAMSystem.BusinessTier.Payload.Email
         public string Subject { get; set; } = null!;
 
         public string Body { get; set; } = null!;
+
+        public bool IsHtml { get; set; }
+
+        public string? PlainTextBody { get; set; }
     }
 }

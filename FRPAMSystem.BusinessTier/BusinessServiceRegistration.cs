@@ -61,6 +61,7 @@
                 services.AddScoped<IEquipmentSubstitutionService, EquipmentSubstitutionService>();
                 services.AddScoped<IScheduleService, ScheduleService>();
                 services.AddScoped<IEmailService, EmailService>();
+                services.AddSingleton<Emails.IEmailTemplateRenderer, Emails.EmailTemplateRenderer>();
                 services.AddScoped<INotificationService, NotificationService>();
                 services.AddScoped<IAuditLogService, AuditLogService>();
                 services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
