@@ -35,5 +35,13 @@ public partial class EquipmentInstance
 
     public virtual ICollection<AllocationEquipmentDetail> AllocationEquipmentDetails { get; set; } = new List<AllocationEquipmentDetail>();
 
+    public virtual ICollection<EquipmentChangeRequest> EquipmentChangeRequestCurrentEquipmentInstances { get; set; } = new List<EquipmentChangeRequest>();
+
+    public virtual ICollection<EquipmentChangeRequest> EquipmentChangeRequestRequestedEquipmentInstances { get; set; } = new List<EquipmentChangeRequest>();
+
+    public virtual ICollection<EquipmentHandover> EquipmentHandovers { get; set; } = new List<EquipmentHandover>();
+
+    public virtual ICollection<EquipmentReturn> EquipmentReturns { get; set; } = new List<EquipmentReturn>();
+
     public virtual EquipmentType EquipmentType { get; set; } = null!;
 }

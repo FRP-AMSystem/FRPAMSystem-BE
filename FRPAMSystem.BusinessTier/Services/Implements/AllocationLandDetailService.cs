@@ -17,10 +17,14 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
     public class AllocationLandDetailService : IAllocationLandDetailService
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly ILandResourceService? _landResourceService;
 
-        public AllocationLandDetailService(IUnitOfWork unitOfWork)
+        public AllocationLandDetailService(
+            IUnitOfWork unitOfWork,
+            ILandResourceService? landResourceService = null)
         {
             _unitOfWork = unitOfWork;
+            _landResourceService = landResourceService;
         }
 
         public async Task<IPaginate<AllocationLandDetailResponse>> ViewAllAllocationLandDetailsAsync(
@@ -124,6 +128,11 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 throw new Exception("Land resource does not exist.");
             }
 
+            if (string.Equals(land.Status, LandResourceStatus.Unavailable.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                throw new Exception($"Land resource '{land.LandCode}' is unavailable and cannot be allocated.");
+            }
+
             var landRequirement = await _unitOfWork
                 .GetRepository<ExperimentLandRequirement>()
                 .FirstOrDefaultAsync(
@@ -158,6 +167,12 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 .InsertAsync(detail);
 
             await _unitOfWork.CommitAsync();
+
+            if (_landResourceService != null &&
+                string.Equals(allocationPlan.ApproveStatus, AllocationPlanStatus.Approved.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                await _landResourceService.SyncLandStatusAsync(land.LandId);
+            }
 
             var created = await _unitOfWork
                 .GetRepository<AllocationLandDetail>()
@@ -218,6 +233,11 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 throw new Exception("Land resource does not exist.");
             }
 
+            if (string.Equals(land.Status, LandResourceStatus.Unavailable.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                throw new Exception($"Land resource '{land.LandCode}' is unavailable and cannot be allocated.");
+            }
+
             var landRequirement = await _unitOfWork
                 .GetRepository<ExperimentLandRequirement>()
                 .FirstOrDefaultAsync(
@@ -249,6 +269,12 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 .Update(detail);
 
             await _unitOfWork.CommitAsync();
+
+            if (_landResourceService != null &&
+                string.Equals(allocationPlan.ApproveStatus, AllocationPlanStatus.Approved.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                await _landResourceService.SyncLandStatusAsync(land.LandId);
+            }
 
             var updated = await _unitOfWork
                 .GetRepository<AllocationLandDetail>()
@@ -291,10 +317,19 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 throw new Exception("In-use or completed allocation detail cannot be deleted.");
             }
 
+            var landId = detail.LandId;
+            var planStatus = detail.AllocationPlan?.ApproveStatus;
+
             _unitOfWork.GetRepository<AllocationLandDetail>()
                 .Delete(detail);
 
             await _unitOfWork.CommitAsync();
+
+            if (_landResourceService != null &&
+                string.Equals(planStatus, AllocationPlanStatus.Approved.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                await _landResourceService.SyncLandStatusAsync(landId);
+            }
 
             return true;
         }
@@ -426,6 +461,90 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 throw new Exception(
                     "Selected land is already allocated in the selected time range.");
             }
+        }
+
+        public async Task<List<AvailableLandResponse>> GetAvailableLandsAsync(
+            AvailableLandFilter filter)
+        {
+            if (filter.StartDate >= filter.EndDate)
+            {
+                throw new Exception("StartDate must be earlier than EndDate.");
+            }
+
+            var cancelledDetailStatus = AllocationDetailStatus.Cancelled.ToString();
+            var completedDetailStatus = AllocationDetailStatus.Completed.ToString();
+            var rejectedPlanStatus = AllocationPlanStatus.Rejected.ToString();
+            var cancelledPlanStatus = AllocationPlanStatus.Cancelled.ToString();
+
+            // 1. Get all conflicting land IDs in this time window
+            var conflictingLandIds = await _unitOfWork
+                .GetRepository<AllocationLandDetail>()
+                .GetQueryable()
+                .Include(d => d.AllocationPlan)
+                .Where(d => (!filter.CurrentAllocationDetailId.HasValue ||
+                             d.AllocationLandDetailId != filter.CurrentAllocationDetailId.Value) &&
+                            d.Status != cancelledDetailStatus &&
+                            d.Status != completedDetailStatus &&
+                            (d.AllocationPlan == null || (d.AllocationPlan.ApproveStatus != rejectedPlanStatus &&
+                                                          d.AllocationPlan.ApproveStatus != cancelledPlanStatus)) &&
+                            d.StartDate < filter.EndDate &&
+                            filter.StartDate < d.EndDate)
+                .Select(d => d.LandId)
+                .Distinct()
+                .ToListAsync();
+
+            var conflictingSet = conflictingLandIds.ToHashSet();
+
+            // 2. Query lands not in conflict and status != Unavailable
+            var lands = await _unitOfWork
+                .GetRepository<LandResource>()
+                .GetQueryable()
+                .Include(l => l.Area)
+                .Where(l => (!filter.AreaId.HasValue || l.AreaId == filter.AreaId.Value) &&
+                            l.Status != LandResourceStatus.Unavailable.ToString() &&
+                            !conflictingSet.Contains(l.LandId))
+                .AsNoTracking()
+                .ToListAsync();
+
+            var results = new List<AvailableLandResponse>();
+
+            foreach (var land in lands)
+            {
+                var isAreaSufficient = !filter.RequiredArea.HasValue || land.AreaSize >= filter.RequiredArea.Value;
+                var isSoilMatched = string.IsNullOrWhiteSpace(filter.RequiredSoilType) ||
+                                    string.Equals(land.SoilType?.Trim(), filter.RequiredSoilType.Trim(), StringComparison.OrdinalIgnoreCase);
+
+                var reasons = new List<string>();
+                if (isAreaSufficient && isSoilMatched)
+                {
+                    reasons.Add("Area and soil type match requirements.");
+                }
+                else
+                {
+                    if (!isAreaSufficient) reasons.Add($"Area ({land.AreaSize:F1} m²) is below required ({filter.RequiredArea:F1} m²).");
+                    if (!isSoilMatched) reasons.Add($"Soil '{land.SoilType}' does not match required '{filter.RequiredSoilType}'.");
+                }
+
+                results.Add(new AvailableLandResponse
+                {
+                    LandId = land.LandId,
+                    LandCode = land.LandCode,
+                    AreaId = land.AreaId,
+                    AreaName = land.Area?.AreaName ?? string.Empty,
+                    AreaSize = land.AreaSize,
+                    SoilType = land.SoilType,
+                    Status = land.Status,
+                    IsAreaSufficient = isAreaSufficient,
+                    IsSoilMatched = isSoilMatched,
+                    MatchReason = string.Join(" ", reasons)
+                });
+            }
+
+            return results
+                .OrderByDescending(r => r.IsAreaSufficient && r.IsSoilMatched)
+                .ThenByDescending(r => r.IsAreaSufficient)
+                .ThenBy(r => r.AreaSize)
+                .ToList();
         }
     }
 }

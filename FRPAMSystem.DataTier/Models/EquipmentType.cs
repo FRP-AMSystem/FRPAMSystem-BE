@@ -46,4 +46,6 @@ public partial class EquipmentType
     public virtual ICollection<ExperimentEquipmentRequirement> ExperimentEquipmentRequirements { get; set; } = new List<ExperimentEquipmentRequirement>();
 
     public virtual ICollection<PhaseEquipmentRequirement> PhaseEquipmentRequirements { get; set; } = new List<PhaseEquipmentRequirement>();
+
+    public virtual ICollection<EquipmentChangeRequest> EquipmentChangeRequests { get; set; } = new List<EquipmentChangeRequest>();
 }

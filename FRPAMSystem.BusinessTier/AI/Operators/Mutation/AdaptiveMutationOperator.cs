@@ -6,11 +6,12 @@ namespace FRPAMSystem.BusinessTier.AI.Operators.Mutation
     public class AdaptiveMutationOperator : IMutationOperator
     {
         private readonly IPopulationGenerator _populationGenerator;
-        private readonly Random _random = new();
+        private readonly Random _random;
 
-        public AdaptiveMutationOperator(IPopulationGenerator populationGenerator)
+        public AdaptiveMutationOperator(IPopulationGenerator populationGenerator, Random? random = null)
         {
             _populationGenerator = populationGenerator;
+            _random = random ?? new Random();
         }
 
         public void Mutate(AllocationChromosome chromosome, OptimizationInput input, int generationIndex)
@@ -34,9 +35,11 @@ namespace FRPAMSystem.BusinessTier.AI.Operators.Mutation
                     continue;
                 }
 
-                var phaseId = chromosome.Genes[i].PhaseId;
-                chromosome.Genes[i] = _populationGenerator.GenerateGene(phaseId, input);
+                var component = (MutationComponent)_random.Next(3);
+                _populationGenerator.MutateComponent(chromosome.Genes[i], input, component);
             }
+
+            PopulationGenerator.NormalizeLandAssignments(chromosome);
         }
     }
 }

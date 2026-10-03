@@ -1,3 +1,5 @@
+using FRPAMSystem.BusinessTier.Enums;
+using FRPAMSystem.DataTier.Abstractions;
 using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.Payload.HumanResourceProfile;
 using FRPAMSystem.BusinessTier.Services.Interface;
@@ -16,10 +18,12 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
     public class HumanResourceProfileService : IHumanResourceProfileService
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IClock? _clock;
 
-        public HumanResourceProfileService(IUnitOfWork unitOfWork)
+        public HumanResourceProfileService(IUnitOfWork unitOfWork, IClock? clock = null)
         {
             _unitOfWork = unitOfWork;
+            _clock = clock;
         }
 
         public async Task<IPaginate<HumanResourceProfileResponse>> ViewAllHumanResourceProfilesAsync(
@@ -27,6 +31,24 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             PagingModel pagingModel)
         {
             PagingModelHelper.NormalizePaging(pagingModel);
+
+            var today = (_clock?.Now ?? DateTime.UtcNow).Date;
+            var cancelledDetailStatus = AllocationDetailStatus.Cancelled.ToString();
+            var completedDetailStatus = AllocationDetailStatus.Completed.ToString();
+            var rejectedPlanStatus = AllocationPlanStatus.Rejected.ToString();
+
+            var activeWorkloads = await _unitOfWork
+                .GetRepository<AllocationHumanDetail>()
+                .GetQueryable()
+                .Include(d => d.AllocationPlan)
+                .Where(d => d.Status != cancelledDetailStatus &&
+                            d.Status != completedDetailStatus &&
+                            d.AllocationPlan.ApproveStatus != rejectedPlanStatus &&
+                            d.StartDate.Date <= today &&
+                            today <= d.EndDate.Date)
+                .GroupBy(d => d.HumanResourceId)
+                .Select(g => new { HumanResourceId = g.Key, TotalHours = g.Sum(d => d.WorkingHours) })
+                .ToDictionaryAsync(g => g.HumanResourceId, g => g.TotalHours);
 
             var query = _unitOfWork
                 .GetRepository<HumanResourceProfile>()
@@ -39,7 +61,7 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 .AsNoTracking()
                 .OrderBy(h => h.User.FullName);
 
-            return await query
+            var result = await query
                 .Select(h => new HumanResourceProfileResponse
                 {
                     HumanResourceId = h.HumanResourceId,
@@ -56,6 +78,20 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                     UpdatedAt = h.UpdatedAt
                 })
                 .ToPaginateAsync(pagingModel.Page, pagingModel.Size, 1);
+
+            foreach (var item in result.Items)
+            {
+                if (activeWorkloads.TryGetValue(item.HumanResourceId, out var hours))
+                {
+                    item.CurrentWorkload = hours;
+                }
+                else
+                {
+                    item.CurrentWorkload = 0;
+                }
+            }
+
+            return result;
         }
 
         public async Task<HumanResourceProfileResponse?> GetHumanResourceProfileByIdAsync(int id)
@@ -76,7 +112,28 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 return null;
             }
 
-            return MapToResponse(profile);
+            var response = MapToResponse(profile);
+
+            var today = (_clock?.Now ?? DateTime.UtcNow).Date;
+            var cancelledDetailStatus = AllocationDetailStatus.Cancelled.ToString();
+            var completedDetailStatus = AllocationDetailStatus.Completed.ToString();
+            var rejectedPlanStatus = AllocationPlanStatus.Rejected.ToString();
+
+            var activeWorkload = await _unitOfWork
+                .GetRepository<AllocationHumanDetail>()
+                .GetQueryable()
+                .Include(d => d.AllocationPlan)
+                .Where(d => d.HumanResourceId == id &&
+                            d.Status != cancelledDetailStatus &&
+                            d.Status != completedDetailStatus &&
+                            d.AllocationPlan.ApproveStatus != rejectedPlanStatus &&
+                            d.StartDate.Date <= today &&
+                            today <= d.EndDate.Date)
+                .SumAsync(d => (double?)d.WorkingHours) ?? 0;
+
+            response.CurrentWorkload = activeWorkload;
+
+            return response;
         }
 
         public async Task<HumanResourceProfileResponse> CreateHumanResourceProfileAsync(
@@ -105,12 +162,15 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 throw new Exception("This user already has a human resource profile.");
             }
 
+            var now = _clock?.Now ?? DateTime.UtcNow;
             var profile = new HumanResourceProfile
             {
                 UserId = request.UserId,
                 MaxWorkingHoursPerDay = request.MaxWorkingHoursPerDay,
                 CurrentWorkload = request.CurrentWorkload,
-                Status = request.Status.ToString()
+                Status = HumanResourceStatus.Available.ToString(),
+                CreatedAt = now,
+                UpdatedAt = now
             };
 
             await _unitOfWork.GetRepository<HumanResourceProfile>()
@@ -171,10 +231,19 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
                 throw new Exception("This user already has another human resource profile.");
             }
 
+            var targetStatus = request.Status.ToString();
+            if ((targetStatus == HumanResourceStatus.Inactive.ToString() ||
+                 targetStatus == HumanResourceStatus.OnLeave.ToString()) &&
+                profile.Status != targetStatus)
+            {
+                await EnsureNoActiveAllocationsOrSchedulesAsync(id, $"set status to {targetStatus}");
+            }
+
             profile.UserId = request.UserId;
             profile.MaxWorkingHoursPerDay = request.MaxWorkingHoursPerDay;
             profile.CurrentWorkload = request.CurrentWorkload;
-            profile.Status = request.Status.ToString();
+            profile.Status = targetStatus;
+            profile.UpdatedAt = _clock?.Now ?? DateTime.UtcNow;
 
             _unitOfWork.GetRepository<HumanResourceProfile>().Update(profile);
 
@@ -297,6 +366,107 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             // Refresh to get full skill objects for response mapping
             var updatedProfile = await GetHumanResourceProfileByIdAsync(id);
             return updatedProfile;
+        }
+
+        public async Task<HumanResourceProfileResponse?> ActivateHumanResourceProfileAsync(int id)
+        {
+            var profile = await _unitOfWork
+                .GetRepository<HumanResourceProfile>()
+                .FirstOrDefaultAsync(
+                    predicate: h => h.HumanResourceId == id,
+                    asNoTracking: false
+                );
+
+            if (profile == null) return null;
+
+            profile.Status = HumanResourceStatus.Available.ToString();
+            profile.UpdatedAt = _clock?.Now ?? DateTime.UtcNow;
+
+            _unitOfWork.GetRepository<HumanResourceProfile>().Update(profile);
+            await _unitOfWork.CommitAsync();
+
+            return await GetHumanResourceProfileByIdAsync(id);
+        }
+
+        public async Task<HumanResourceProfileResponse?> DeactivateHumanResourceProfileAsync(int id)
+        {
+            var profile = await _unitOfWork
+                .GetRepository<HumanResourceProfile>()
+                .FirstOrDefaultAsync(
+                    predicate: h => h.HumanResourceId == id,
+                    asNoTracking: false
+                );
+
+            if (profile == null) return null;
+
+            await EnsureNoActiveAllocationsOrSchedulesAsync(id, "deactivate");
+
+            profile.Status = HumanResourceStatus.Inactive.ToString();
+            profile.UpdatedAt = _clock?.Now ?? DateTime.UtcNow;
+
+            _unitOfWork.GetRepository<HumanResourceProfile>().Update(profile);
+            await _unitOfWork.CommitAsync();
+
+            return await GetHumanResourceProfileByIdAsync(id);
+        }
+
+        public async Task<HumanResourceProfileResponse?> SetLeaveHumanResourceProfileAsync(int id)
+        {
+            var profile = await _unitOfWork
+                .GetRepository<HumanResourceProfile>()
+                .FirstOrDefaultAsync(
+                    predicate: h => h.HumanResourceId == id,
+                    asNoTracking: false
+                );
+
+            if (profile == null) return null;
+
+            await EnsureNoActiveAllocationsOrSchedulesAsync(id, "put on leave");
+
+            profile.Status = HumanResourceStatus.OnLeave.ToString();
+            profile.UpdatedAt = _clock?.Now ?? DateTime.UtcNow;
+
+            _unitOfWork.GetRepository<HumanResourceProfile>().Update(profile);
+            await _unitOfWork.CommitAsync();
+
+            return await GetHumanResourceProfileByIdAsync(id);
+        }
+
+        private async Task EnsureNoActiveAllocationsOrSchedulesAsync(int humanResourceId, string actionDescription)
+        {
+            var today = (_clock?.Now ?? DateTime.UtcNow).Date;
+            var cancelledDetailStatus = AllocationDetailStatus.Cancelled.ToString();
+            var completedDetailStatus = AllocationDetailStatus.Completed.ToString();
+            var rejectedPlanStatus = AllocationPlanStatus.Rejected.ToString();
+
+            var hasActiveAllocation = await _unitOfWork
+                .GetRepository<AllocationHumanDetail>()
+                .GetQueryable()
+                .Include(d => d.AllocationPlan)
+                .AnyAsync(d => d.HumanResourceId == humanResourceId &&
+                               d.Status != cancelledDetailStatus &&
+                               d.Status != completedDetailStatus &&
+                               d.AllocationPlan.ApproveStatus != rejectedPlanStatus &&
+                               today <= d.EndDate.Date);
+
+            if (hasActiveAllocation)
+            {
+                throw new Exception(
+                    $"Cannot {actionDescription} because the human resource has active or upcoming allocations.");
+            }
+
+            var hasUpcomingSchedule = await _unitOfWork
+                .GetRepository<Schedule>()
+                .AnyAsync(s => s.AssignedHumanResourceId == humanResourceId &&
+                               s.Status != ScheduleStatus.Cancelled.ToString() &&
+                               s.Status != ScheduleStatus.Completed.ToString() &&
+                               today <= s.EndDate.Date);
+
+            if (hasUpcomingSchedule)
+            {
+                throw new Exception(
+                    $"Cannot {actionDescription} because the human resource has upcoming schedules.");
+            }
         }
 
         private static HumanResourceProfileResponse MapToResponse(

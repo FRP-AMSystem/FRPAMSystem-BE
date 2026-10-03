@@ -11,140 +11,184 @@ namespace FRPAMSystem.BusinessTier.AI.Fitness.Evaluators
             var result = new ConstraintEvaluationResult();
             var instances = input.EquipmentInstances.ToDictionary(e => e.EquipmentInstanceId);
             var equipmentTypes = input.EquipmentInstances
-                .Select(e => e.EquipmentType)
-                .Where(t => t is not null)
-                .GroupBy(t => t.EquipmentTypeId)
-                .ToDictionary(g => g.Key, g => g.First());
-            var scoreParts = new List<double>();
+                .Where(e => e.EquipmentType is not null)
+                .GroupBy(e => e.EquipmentTypeId)
+                .ToDictionary(g => g.Key, g => g.First().EquipmentType!);
+            var phaseScores = new List<double>();
+            var phases = new List<PhaseScoreExplanation>();
 
             foreach (var gene in chromosome.Genes)
             {
                 var requirements = FitnessEvaluationHelper.GetEquipmentRequirements(gene.PhaseId, input).ToList();
-                var geneScore = requirements.Count == 0 ? 80d : 10d;
+                var phase = new PhaseScoreExplanation { PhaseId = gene.PhaseId };
+                var phaseParts = new List<(double Quantity, double Type, double Availability, double Condition, double Substitution)>();
 
                 foreach (var requirement in requirements)
                 {
-                    var assignments = gene.EquipmentAssignments
-                        .Where(e => e.PhaseEquipmentRequirementId == requirement.PhaseEquipmentRequirementId ||
-                                    e.ExperimentEquipmentRequirementId == requirement.ExperimentEquipmentRequirementId)
-                        .ToList();
+                    var assignments = gene.EquipmentAssignments.Where(a =>
+                        requirement.PhaseEquipmentRequirementId.HasValue
+                            ? a.PhaseEquipmentRequirementId == requirement.PhaseEquipmentRequirementId
+                            : requirement.ExperimentEquipmentRequirementId.HasValue
+                                ? a.ExperimentEquipmentRequirementId == requirement.ExperimentEquipmentRequirementId
+                                : a.RequiredEquipmentTypeId == requirement.EquipmentTypeId).ToList();
+                    var quantity = FitnessEvaluationHelper.Percent(assignments.Count, requirement.Quantity) * 100d;
+                    phase.Adjustments.Add(Adjustment("Equipment Quantity", quantity >= 100d ? 100d : quantity, quantity >= 100d ? "Adjustment" : "Partial",
+                        $"Phase {gene.PhaseId} equipment requirement (Type {requirement.EquipmentTypeId}) quantity fulfillment: {assignments.Count}/{requirement.Quantity}.",
+                        $"{quantity:F2}"));
+                    if (assignments.Count < requirement.Quantity)
+                    {
+                        Add(result, ConstraintSeverity.Soft,
+                            $"Phase {gene.PhaseId} has insufficient equipment quantity.");
+                    }
+                    if (equipmentTypes.TryGetValue(requirement.EquipmentTypeId, out var type) &&
+                        string.Equals(type.TrackingType, "Quantity", StringComparison.OrdinalIgnoreCase) &&
+                        type.AvailableQuantity < requirement.Quantity)
+                    {
+                        Add(result, ConstraintSeverity.Soft,
+                            $"Phase {gene.PhaseId} has quantity-based equipment shortage for type {requirement.EquipmentTypeId}.");
+                    }
 
-                    var typeScore = EvaluateQuantity(requirement, assignments, equipmentTypes, result, gene.PhaseId);
-                    geneScore += typeScore * 0.35d;
-
+                    var evaluated = new List<(double Type, double Availability, double Condition, double Substitution)>();
                     foreach (var assignment in assignments)
                     {
                         if (assignment.EquipmentInstanceId is null ||
                             !instances.TryGetValue(assignment.EquipmentInstanceId.Value, out var instance))
                         {
                             Add(result, ConstraintSeverity.Hard, $"Phase {gene.PhaseId} has a missing equipment instance.");
-                            geneScore -= 25d;
+                            evaluated.Add((0d, 0d, 0d, 0d));
                             continue;
                         }
 
-                        var assignmentScore = 30d;
-                        if (instance.EquipmentTypeId == requirement.EquipmentTypeId)
-                        {
-                            assignmentScore += 30d;
-                        }
-                        else if (assignment.IsSubstitute && requirement.AllowSubstitute)
-                        {
-                            var efficiencyRate = Math.Clamp(assignment.EfficiencyRate, 0d, 1d);
+                        var primary = !assignment.IsSubstitute &&
+                                      assignment.RequiredEquipmentTypeId == requirement.EquipmentTypeId &&
+                                      instance.EquipmentTypeId == requirement.EquipmentTypeId &&
+                                      assignment.AllocatedEquipmentTypeId == requirement.EquipmentTypeId &&
+                                      Math.Abs(assignment.EfficiencyRate - 1d) < 0.000001d &&
+                                      Math.Abs(assignment.TimeMultiplier - 1d) < 0.000001d;
+                        var efficiency = FitnessEvaluationHelper.ClampScore(assignment.EfficiencyRate * 100d);
+                        var substitution = input.EquipmentSubstitutions.FirstOrDefault(s =>
+                            s.PrimaryEquipmentTypeId == requirement.EquipmentTypeId &&
+                            s.SubEquipmentTypeId == instance.EquipmentTypeId);
+                        var validSubstitution = assignment.IsSubstitute &&
+                                                assignment.RequiredEquipmentTypeId == requirement.EquipmentTypeId &&
+                                                assignment.AllocatedEquipmentTypeId == instance.EquipmentTypeId &&
+                                                requirement.AllowSubstitute &&
+                                                substitution is not null &&
+                                                (!requirement.MinAcceptableEfficiency.HasValue ||
+                                                 assignment.EfficiencyRate >= requirement.MinAcceptableEfficiency.Value) &&
+                                                Math.Abs(assignment.EfficiencyRate - substitution!.EfficiencyRate) < 0.000001d &&
+                                                Math.Abs(assignment.TimeMultiplier - substitution.TimeMultiplier) < 0.000001d;
+                        var typeScore = primary ? 100d : validSubstitution ? efficiency : 0d;
+                        var substitutionScore = primary ? 100d : validSubstitution ? efficiency : 0d;
 
-                            if (requirement.MinAcceptableEfficiency.HasValue &&
-                                efficiencyRate < requirement.MinAcceptableEfficiency.Value)
-                            {
-                                Add(result, ConstraintSeverity.Soft, $"Equipment {instance.AssetCode} substitute efficiency is below the minimum.");
-                            }
-
-                            assignmentScore = (assignmentScore + 20d) * Math.Clamp(efficiencyRate, 0d, 1d);
-                            Add(result, ConstraintSeverity.Soft, $"Equipment {instance.AssetCode} is a substitute allocation.");
-                        }
-                        else
+                        if (!primary && !validSubstitution)
                         {
-                            Add(result, ConstraintSeverity.Hard, $"Equipment {instance.AssetCode} does not match required type.");
-                            assignmentScore -= 40d;
+                            Add(result, ConstraintSeverity.Hard,
+                                $"Equipment {instance.AssetCode} is an invalid substitution or does not match required type.");
+                            phase.Adjustments.Add(Adjustment("Equipment Substitution", 0d, "Substitution",
+                                $"RequiredEquipmentTypeId={requirement.EquipmentTypeId}, AllocatedEquipmentTypeId={assignment.AllocatedEquipmentTypeId}, " +
+                                $"EquipmentInstanceId={assignment.EquipmentInstanceId}, AssetCode={instance.AssetCode}, EfficiencyRate={assignment.EfficiencyRate:F2}, " +
+                                $"TimeMultiplier={assignment.TimeMultiplier:F2}, IsSubstitute={assignment.IsSubstitute}.", "Invalid substitution → 0"));
+                        }
+                        else if (validSubstitution)
+                        {
+                            result.Disadvantages.Add(
+                                $"Equipment {instance.AssetCode} uses a valid substitute at {assignment.EfficiencyRate:P0} efficiency.");
+                            phase.Adjustments.Add(Adjustment("Equipment Substitution", efficiency, "Substitution",
+                                $"RequiredEquipmentTypeId={requirement.EquipmentTypeId}, AllocatedEquipmentTypeId={assignment.AllocatedEquipmentTypeId}, " +
+                                $"EquipmentInstanceId={assignment.EquipmentInstanceId}, AssetCode={instance.AssetCode}, EfficiencyRate={assignment.EfficiencyRate:F2}, " +
+                                $"TimeMultiplier={assignment.TimeMultiplier:F2}, IsSubstitute=true.", $"{assignment.EfficiencyRate:F2} × 100 = {efficiency:F2}"));
                         }
 
-                        if (!FitnessEvaluationHelper.IsAvailableStatus(instance.Status))
+                        var availability = FitnessEvaluationHelper.IsAvailableStatus(instance.Status) ? 100d : 0d;
+                        if (availability == 0d)
                         {
                             var severity = FitnessEvaluationHelper.IsMaintenanceStatus(instance.Status)
-                                ? ConstraintSeverity.Hard
-                                : ConstraintSeverity.Soft;
+                                ? ConstraintSeverity.Hard : ConstraintSeverity.Soft;
                             Add(result, severity, $"Equipment {instance.AssetCode} status is {instance.Status}.");
-                            assignmentScore -= severity == ConstraintSeverity.Hard ? 40d : 20d;
                         }
-
+                        var condition = ConditionScore(instance.ConditionLevel);
                         if (input.ExistingEquipmentAllocations.Any(a =>
                                 a.EquipmentInstanceId == instance.EquipmentInstanceId &&
                                 FitnessEvaluationHelper.Overlaps(gene.StartDate, gene.EndDate, a.StartDate, a.EndDate)))
                         {
                             Add(result, ConstraintSeverity.Hard, $"Equipment {instance.AssetCode} overlaps with an existing allocation.");
-                            assignmentScore -= 35d;
                         }
 
-                        assignmentScore += ConditionScore(instance.ConditionLevel);
-                        geneScore += FitnessEvaluationHelper.ClampScore(assignmentScore) * 0.65d / Math.Max(1, requirement.Quantity);
+                        evaluated.Add((typeScore, availability, condition, substitutionScore));
                     }
+
+                    var averages = evaluated.Count == 0
+                        ? (0d, 0d, 0d, 0d)
+                        : (evaluated.Average(e => e.Type), evaluated.Average(e => e.Availability),
+                           evaluated.Average(e => e.Condition), evaluated.Average(e => e.Substitution));
+                    phaseParts.Add((quantity, averages.Item1, averages.Item2, averages.Item3, averages.Item4));
                 }
 
-                scoreParts.Add(FitnessEvaluationHelper.ClampScore(geneScore));
+                var score = phaseParts.Count == 0
+                    ? 100d
+                    : phaseParts.Average(p =>
+                        p.Quantity * 0.25d + p.Type * 0.30d + p.Availability * 0.15d +
+                        p.Condition * 0.10d + p.Substitution * 0.20d);
+                foreach (var part in phaseParts)
+                {
+                    phase.SubScores.Add(SubScore("Equipment Quantity", part.Quantity, 0.25d));
+                    phase.SubScores.Add(SubScore("Equipment Type Match", part.Type, 0.30d));
+                    phase.SubScores.Add(SubScore("Equipment Availability", part.Availability, 0.15d));
+                    phase.SubScores.Add(SubScore("Equipment Condition", part.Condition, 0.10d));
+                    phase.SubScores.Add(SubScore("Equipment Substitution", part.Substitution, 0.20d));
+                }
+                phase.FinalScore = score;
+                phase.Calculation = phaseParts.Count == 0
+                    ? "No equipment requirements = 100.00"
+                    : $"Average weighted equipment requirements = {score:F2}";
+                phaseScores.Add(score);
+                phases.Add(phase);
             }
 
             var internalOverlaps = FitnessEvaluationHelper.CountInternalOverlaps(
                 chromosome.Genes.SelectMany(g => g.EquipmentAssignments
                     .Select(e => (e.EquipmentInstanceId, g.StartDate, g.EndDate))));
-
-            for (var i = 0; i < internalOverlaps; i++)
+            if (internalOverlaps > 0)
             {
                 Add(result, ConstraintSeverity.Hard, "Equipment is double-booked inside the candidate plan.");
             }
 
-            result.Score = scoreParts.Count == 0 ? 0d : scoreParts.Average();
+            result.Score = phaseScores.Count == 0 ? 0d : FitnessEvaluationHelper.ClampScore(phaseScores.Average());
+            result.Explanation = new ScoreExplanation
+            {
+                FinalScore = result.Score,
+                Calculation = phaseScores.Count == 0
+                    ? "No equipment phases = 0.00"
+                    : $"Average({string.Join(", ", phaseScores.Select(s => s.ToString("F2")))}) = {result.Score:F2}",
+                Adjustments = phases.SelectMany(p => p.Adjustments).ToList(),
+                Phases = phases
+            };
             return result;
         }
 
-        private static double EvaluateQuantity(
-            EquipmentRequirementSnapshot requirement,
-            IReadOnlyCollection<EquipmentAssignmentGene> assignments,
-            IReadOnlyDictionary<int, DataTier.Models.EquipmentType> equipmentTypes,
-            ConstraintEvaluationResult result,
-            int phaseId)
-        {
-            if (equipmentTypes.TryGetValue(requirement.EquipmentTypeId, out var type) &&
-                type.TrackingType.Equals("Quantity", StringComparison.OrdinalIgnoreCase))
+        private static double ConditionScore(string? conditionLevel) =>
+            conditionLevel?.Trim().ToLowerInvariant() switch
             {
-                var availableQuantity = Math.Max(type.AvailableQuantity, assignments.Count);
-                if (availableQuantity < requirement.Quantity)
-                {
-                    Add(result, ConstraintSeverity.Soft, $"Phase {phaseId} has quantity-based equipment shortage for type {requirement.EquipmentTypeId}.");
-                }
-
-                return 100d * FitnessEvaluationHelper.Percent(availableQuantity, requirement.Quantity);
-            }
-
-            if (assignments.Count < requirement.Quantity)
-            {
-                Add(result, ConstraintSeverity.Soft, $"Phase {phaseId} has insufficient equipment quantity.");
-            }
-
-            return 100d * FitnessEvaluationHelper.Percent(assignments.Count, requirement.Quantity);
-        }
-
-        private static double ConditionScore(string? conditionLevel)
-        {
-            return conditionLevel?.Trim().ToLowerInvariant() switch
-            {
-                "good" => 15d,
-                "fair" => 9d,
-                "poor" => 3d,
-                "critical" => -15d,
-                _ => 5d
+                "good" => 100d,
+                "fair" => 75d,
+                "poor" => 40d,
+                "critical" => 0d,
+                _ => 0d
             };
-        }
+
+        private static ScoreAdjustment SubScore(string factor, double score, double weight) =>
+            new() { Factor = factor, Points = score * weight, Type = "SubScore", Reason = "Normalized equipment component score.", Calculation = $"{score:F2} × {weight:P0} = {score * weight:F2}" };
+
+        private static ScoreAdjustment Adjustment(string factor, double points, string type, string reason, string calculation) =>
+            new() { Factor = factor, Points = points, Type = type, Reason = reason, Calculation = calculation };
 
         private static void Add(ConstraintEvaluationResult result, ConstraintSeverity severity, string message)
         {
+            if (result.Violations.Any(v => v.Severity == severity && v.Message == message))
+            {
+                return;
+            }
             result.Violations.Add(new ConstraintViolation("Equipment", severity, message));
             result.Disadvantages.Add(message);
         }

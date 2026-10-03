@@ -1,0 +1,1188 @@
+using FRPAMSystem.BusinessTier.AI.Fitness;
+using FRPAMSystem.BusinessTier.AI.Fitness.Evaluators;
+using FRPAMSystem.BusinessTier.AI.Generator;
+using FRPAMSystem.BusinessTier.AI.Models;
+using FRPAMSystem.DataTier.Models;
+using Xunit;
+
+namespace FRPAMSystem.NotificationTests.Services
+{
+    public class FitnessExplainabilityTests
+    {
+        private static IFitnessCalculator CreateFitnessCalculator()
+        {
+            return new FitnessCalculator(new IConstraintEvaluator[]
+            {
+                new LandConstraintEvaluator(),
+                new HumanConstraintEvaluator(),
+                new EquipmentConstraintEvaluator(),
+                new MaintenanceConstraintEvaluator()
+            });
+        }
+
+        private static OptimizationInput CreateBaseInput()
+        {
+            var experiment = new Experiment
+            {
+                ExperimentId = 1,
+                ExperimentName = "Explainability Test Experiment",
+                ExpectStartDate = new DateTime(2026, 6, 1),
+                ExpectEndDate = new DateTime(2026, 6, 10),
+                Deadline = new DateTime(2026, 6, 15)
+            };
+
+            var phase1 = new ExperimentPhase
+            {
+                PhaseId = 1,
+                ExperimentId = 1,
+                PhaseName = "Soil Prep",
+                PhaseOrder = 1,
+                ExpectedStartDate = new DateTime(2026, 6, 1),
+                ExpectedEndDate = new DateTime(2026, 6, 5)
+            };
+
+            var land = new LandResource
+            {
+                LandId = 10,
+                LandCode = "LND-01",
+                SoilType = "Loam",
+                AreaSize = 100m,
+                Status = "Available"
+            };
+
+            var landReq = new ExperimentLandRequirement
+            {
+                ExpLandReqId = 100,
+                ExperimentId = 1,
+                RequiredSoilType = "Loam",
+                RequiredArea = 100m
+            };
+
+            var researcher = new HumanResourceProfile
+            {
+                HumanResourceId = 20,
+                Status = "Available",
+                CurrentWorkload = 0d,
+                MaxWorkingHoursPerDay = 8d,
+                User = new User { UserId = 20, FullName = "Dr. Alice", RoleId = 2 },
+                HumanResourceSkills = new List<HumanResourceSkill>
+                {
+                    new HumanResourceSkill { HumanResourceId = 20, SkillId = 5 }
+                }
+            };
+
+            var humanReq = new PhaseHumanRequirement
+            {
+                PhaseHumanReqId = 200,
+                PhaseId = 1,
+                RoleId = 2,
+                RequiredSkillId = 5,
+                Quantity = 1
+            };
+
+            var eqType = new EquipmentType
+            {
+                EquipmentTypeId = 6,
+                Name = "Tractor Primary",
+                BaseMaintenanceIntervalHours = 100d
+            };
+
+            var eqInstance = new EquipmentInstance
+            {
+                EquipmentInstanceId = 30,
+                AssetCode = "TRC-01",
+                EquipmentTypeId = 6,
+                EquipmentType = eqType,
+                Status = "Available",
+                ConditionLevel = "Good",
+                UsageHoursSinceLastMaintenance = 10d
+            };
+
+            var eqReq = new PhaseEquipmentRequirement
+            {
+                PhaseEquipmentReqId = 300,
+                PhaseId = 1,
+                EquipmentTypeId = 6,
+                Quantity = 1
+            };
+
+            return new OptimizationInput
+            {
+                Experiment = experiment,
+                ExperimentPhases = new[] { phase1 },
+                LandResources = new[] { land },
+                HumanResources = new[] { researcher },
+                EquipmentInstances = new[] { eqInstance },
+                ExperimentLandRequirements = new[] { landReq },
+                PhaseHumanRequirements = new[] { humanReq },
+                PhaseEquipmentRequirements = new[] { eqReq },
+                Settings = new OptimizationSettings()
+            };
+        }
+
+        [Fact]
+        public void FitnessBreakdown_ContainsOnlyResourceComponentsAndAdjustments()
+        {
+            var input = CreateBaseInput();
+            var chromosome = new AllocationChromosome
+            {
+                Genes = new List<AllocationGene>
+                {
+                    new()
+                    {
+                        PhaseId = 1,
+                        LandId = 10,
+                        ExperimentLandRequirementId = 100,
+                        StartDate = new DateTime(2026, 6, 1),
+                        EndDate = new DateTime(2026, 6, 5),
+                        AssignedHumanResourceIds = new List<int> { 20 }
+                    }
+                }
+            };
+
+            var baseline = CreateFitnessCalculator().Evaluate(chromosome.Clone(), input);
+            var result = new FitnessCalculator(new IConstraintEvaluator[]
+            {
+                new ScheduleOnlyEvaluator(),
+                new LandConstraintEvaluator(),
+                new HumanConstraintEvaluator(),
+                new EquipmentConstraintEvaluator(),
+                new MaintenanceConstraintEvaluator()
+            }).Evaluate(chromosome, input);
+
+            Assert.NotNull(result.Breakdown.Land);
+            Assert.NotNull(result.Breakdown.Human);
+            Assert.NotNull(result.Breakdown.Equipment);
+            Assert.NotNull(result.Breakdown.Penalties);
+            Assert.NotNull(result.Breakdown.Bonuses);
+            Assert.Contains("Final Fitness", result.Breakdown.OverallCalculation);
+            Assert.DoesNotContain("Schedule", result.Breakdown.OverallCalculation, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(baseline.FitnessScore, result.FitnessScore);
+        }
+
+        [Fact]
+        public void Test01_PerfectFeasibleAllocation()
+        {
+            var input = CreateBaseInput();
+            var calculator = CreateFitnessCalculator();
+
+            var chromosome = new AllocationChromosome
+            {
+                Genes = new List<AllocationGene>
+                {
+                    new AllocationGene
+                    {
+                        PhaseId = 1,
+                        StartDate = new DateTime(2026, 6, 1),
+                        EndDate = new DateTime(2026, 6, 5),
+                        LandId = 10,
+                        ExperimentLandRequirementId = 100,
+                        AssignedHumanResourceIds = new List<int> { 20 },
+                        EquipmentAssignments = new List<EquipmentAssignmentGene>
+                        {
+                            new EquipmentAssignmentGene
+                            {
+                                PhaseEquipmentRequirementId = 300,
+                                RequiredEquipmentTypeId = 6,
+                                AllocatedEquipmentTypeId = 6,
+                                EquipmentInstanceId = 30,
+                                IsSubstitute = false,
+                                EfficiencyRate = 1.0d,
+                                TimeMultiplier = 1.0d
+                            }
+                        }
+                    }
+                }
+            };
+
+            var result = calculator.Evaluate(chromosome, input);
+
+            Assert.True(result.IsFeasible);
+            Assert.Equal(0, result.HardViolationCount);
+            Assert.True(result.FitnessScore > 80d);
+            Assert.NotEmpty(result.Breakdown.OverallCalculation);
+            Assert.NotEmpty(result.Breakdown.Land.Calculation);
+            Assert.NotEmpty(result.Breakdown.Human.Calculation);
+            Assert.NotEmpty(result.Breakdown.Equipment.Calculation);
+        }
+
+        [Fact]
+        public void Test02_LandMismatch_SoilMismatch()
+        {
+            var input = CreateBaseInput();
+            input.LandResources.First().SoilType = "Clay"; // Mismatch vs required Loam
+
+            var calculator = CreateFitnessCalculator();
+            var chromosome = new AllocationChromosome
+            {
+                Genes = new List<AllocationGene>
+                {
+                    new AllocationGene
+                    {
+                        PhaseId = 1,
+                        StartDate = new DateTime(2026, 6, 1),
+                        EndDate = new DateTime(2026, 6, 5),
+                        LandId = 10,
+                        AssignedHumanResourceIds = new List<int> { 20 }
+                    }
+                }
+            };
+
+            var result = calculator.Evaluate(chromosome, input);
+            var soilMismatchAdj = result.Breakdown.Land.Adjustments.FirstOrDefault(a => a.Factor == "Soil Mismatch");
+            Assert.NotNull(soilMismatchAdj);
+            Assert.Equal(-15d, soilMismatchAdj.Points);
+        }
+
+        [Fact]
+        public void Test03_InsufficientLandArea()
+        {
+            var input = CreateBaseInput();
+            input.LandResources.First().AreaSize = 50m; // Required is 100m
+
+            var calculator = CreateFitnessCalculator();
+            var chromosome = new AllocationChromosome
+            {
+                Genes = new List<AllocationGene>
+                {
+                    new AllocationGene
+                    {
+                        PhaseId = 1,
+                        StartDate = new DateTime(2026, 6, 1),
+                        EndDate = new DateTime(2026, 6, 5),
+                        LandId = 10,
+                        AssignedHumanResourceIds = new List<int> { 20 }
+                    }
+                }
+            };
+
+            var result = calculator.Evaluate(chromosome, input);
+            Assert.False(result.IsFeasible);
+            var areaDefAdj = result.Breakdown.Land.Adjustments.FirstOrDefault(a => a.Factor == "Area Deficiency");
+            Assert.NotNull(areaDefAdj);
+            Assert.True(areaDefAdj.Points < 0);
+        }
+
+        [Fact]
+        public void Test04_HumanShortage()
+        {
+            var input = CreateBaseInput();
+            var calculator = CreateFitnessCalculator();
+
+            var chromosome = new AllocationChromosome
+            {
+                Genes = new List<AllocationGene>
+                {
+                    new AllocationGene
+                    {
+                        PhaseId = 1,
+                        StartDate = new DateTime(2026, 6, 1),
+                        EndDate = new DateTime(2026, 6, 5),
+                        LandId = 10,
+                        AssignedHumanResourceIds = new List<int>() // Empty staff
+                    }
+                }
+            };
+
+            var result = calculator.Evaluate(chromosome, input);
+            var shortageAdj = result.Breakdown.Human.Adjustments.FirstOrDefault(a => a.Factor == "Staff Quantity Shortage");
+            Assert.NotNull(shortageAdj);
+        }
+
+        [Fact]
+        public void Test05_HumanRoleMismatch()
+        {
+            var input = CreateBaseInput();
+            input.HumanResources.First().User!.RoleId = 99; // Required is 2
+
+            var calculator = CreateFitnessCalculator();
+            var chromosome = new AllocationChromosome
+            {
+                Genes = new List<AllocationGene>
+                {
+                    new AllocationGene
+                    {
+                        PhaseId = 1,
+                        StartDate = new DateTime(2026, 6, 1),
+                        EndDate = new DateTime(2026, 6, 5),
+                        LandId = 10,
+                        AssignedHumanResourceIds = new List<int> { 20 }
+                    }
+                }
+            };
+
+            var result = calculator.Evaluate(chromosome, input);
+            var roleMismatchAdj = result.Breakdown.Human.Adjustments.FirstOrDefault(a => a.Factor == "Role Mismatch");
+            Assert.NotNull(roleMismatchAdj);
+            Assert.Contains("role 2", result.ConstraintReport.RoleConflicts.FirstOrDefault() ?? "");
+        }
+
+        [Fact]
+        public void Test06_HumanSkillMismatch()
+        {
+            var input = CreateBaseInput();
+            input.HumanResources.First().HumanResourceSkills.Clear(); // No matching skill
+
+            var calculator = CreateFitnessCalculator();
+            var chromosome = new AllocationChromosome
+            {
+                Genes = new List<AllocationGene>
+                {
+                    new AllocationGene
+                    {
+                        PhaseId = 1,
+                        StartDate = new DateTime(2026, 6, 1),
+                        EndDate = new DateTime(2026, 6, 5),
+                        LandId = 10,
+                        AssignedHumanResourceIds = new List<int> { 20 }
+                    }
+                }
+            };
+
+            var result = calculator.Evaluate(chromosome, input);
+            var skillMismatchAdj = result.Breakdown.Human.Adjustments.FirstOrDefault(a => a.Factor == "Skill Mismatch");
+            Assert.NotNull(skillMismatchAdj);
+        }
+
+        [Fact]
+        public void Test07_EquipmentShortage()
+        {
+            var input = CreateBaseInput();
+            var calculator = CreateFitnessCalculator();
+
+            var chromosome = new AllocationChromosome
+            {
+                Genes = new List<AllocationGene>
+                {
+                    new AllocationGene
+                    {
+                        PhaseId = 1,
+                        StartDate = new DateTime(2026, 6, 1),
+                        EndDate = new DateTime(2026, 6, 5),
+                        LandId = 10,
+                        AssignedHumanResourceIds = new List<int> { 20 },
+                        EquipmentAssignments = new List<EquipmentAssignmentGene>() // 0 equipment
+                    }
+                }
+            };
+
+            var result = calculator.Evaluate(chromosome, input);
+            var qtyAdj = result.Breakdown.Equipment.Adjustments.FirstOrDefault(a => a.Factor == "Equipment Quantity");
+            Assert.NotNull(qtyAdj);
+            Assert.Equal(0d, qtyAdj.Points);
+        }
+
+        [Fact]
+        public void Test08_ValidEquipmentSubstitution()
+        {
+            var input = CreateBaseInput();
+            var subType = new EquipmentType
+            {
+                EquipmentTypeId = 9,
+                Name = "Substitute Mini Tractor",
+                BaseMaintenanceIntervalHours = 100d
+            };
+
+            var subInstance = new EquipmentInstance
+            {
+                EquipmentInstanceId = 31,
+                AssetCode = "TRC-SUB-01",
+                EquipmentTypeId = 9,
+                EquipmentType = subType,
+                Status = "Available",
+                ConditionLevel = "Good",
+                UsageHoursSinceLastMaintenance = 10d
+            };
+
+            input.EquipmentInstances = new[] { subInstance };
+            input.ExperimentEquipmentRequirements = new[]
+            {
+                new ExperimentEquipmentRequirement
+                {
+                    ExpEquipmentReqId = 300,
+                    ExperimentId = 1,
+                    EquipmentTypeId = 6,
+                    Quantity = 1,
+                    AllowSubstitute = true,
+                    MinAcceptableEfficiency = 0.7d
+                }
+            };
+            input.EquipmentSubstitutions = new[]
+            {
+                new EquipmentSubstitution
+                {
+                    PrimaryEquipmentTypeId = 6,
+                    SubEquipmentTypeId = 9,
+                    EfficiencyRate = 0.8d,
+                    TimeMultiplier = 1.25d
+                }
+            };
+
+            var calculator = CreateFitnessCalculator();
+            var chromosome = new AllocationChromosome
+            {
+                Genes = new List<AllocationGene>
+                {
+                    new AllocationGene
+                    {
+                        PhaseId = 1,
+                        StartDate = new DateTime(2026, 6, 1),
+                        EndDate = new DateTime(2026, 6, 6),
+                        LandId = 10,
+                        AssignedHumanResourceIds = new List<int> { 20 },
+                        EquipmentAssignments = new List<EquipmentAssignmentGene>
+                        {
+                            new EquipmentAssignmentGene
+                            {
+                                PhaseEquipmentRequirementId = 300,
+                                RequiredEquipmentTypeId = 6,
+                                AllocatedEquipmentTypeId = 9,
+                                EquipmentInstanceId = 31,
+                                IsSubstitute = true,
+                                EfficiencyRate = 0.8d,
+                                TimeMultiplier = 1.25d
+                            }
+                        }
+                    }
+                }
+            };
+
+            var result = calculator.Evaluate(chromosome, input);
+            Assert.True(result.IsFeasible);
+            Assert.Equal(0, result.HardViolationCount);
+
+            var subAdjustment = result.Breakdown.Equipment.Adjustments
+                .FirstOrDefault(a => a.Factor == "Equipment Substitution");
+            Assert.NotNull(subAdjustment);
+            Assert.Equal("Substitution", subAdjustment.Type);
+            Assert.Contains("0.8", subAdjustment.Calculation);
+            Assert.Contains("1.25", subAdjustment.Reason);
+        }
+
+        [Fact]
+        public void Test09_InvalidEquipmentSubstitution_BelowMinEfficiency()
+        {
+            var input = CreateBaseInput();
+            var subType = new EquipmentType { EquipmentTypeId = 9, Name = "Weak Tractor" };
+            var subInstance = new EquipmentInstance
+            {
+                EquipmentInstanceId = 31,
+                AssetCode = "TRC-WEAK",
+                EquipmentTypeId = 9,
+                EquipmentType = subType,
+                Status = "Available",
+                ConditionLevel = "Good",
+                UsageHoursSinceLastMaintenance = 10d
+            };
+
+            input.EquipmentInstances = new[] { subInstance };
+            input.ExperimentEquipmentRequirements = new[]
+            {
+                new ExperimentEquipmentRequirement
+                {
+                    ExpEquipmentReqId = 300,
+                    ExperimentId = 1,
+                    EquipmentTypeId = 6,
+                    Quantity = 1,
+                    AllowSubstitute = true,
+                    MinAcceptableEfficiency = 0.85d // Required 85%
+                }
+            };
+
+            var calculator = CreateFitnessCalculator();
+            var chromosome = new AllocationChromosome
+            {
+                Genes = new List<AllocationGene>
+                {
+                    new AllocationGene
+                    {
+                        PhaseId = 1,
+                        StartDate = new DateTime(2026, 6, 1),
+                        EndDate = new DateTime(2026, 6, 6),
+                        LandId = 10,
+                        AssignedHumanResourceIds = new List<int> { 20 },
+                        EquipmentAssignments = new List<EquipmentAssignmentGene>
+                        {
+                            new EquipmentAssignmentGene
+                            {
+                                PhaseEquipmentRequirementId = 300,
+                                RequiredEquipmentTypeId = 6,
+                                AllocatedEquipmentTypeId = 9,
+                                EquipmentInstanceId = 31,
+                                IsSubstitute = true,
+                                EfficiencyRate = 0.6d, // 60% < 85%
+                                TimeMultiplier = 1.5d
+                            }
+                        }
+                    }
+                }
+            };
+
+            var result = calculator.Evaluate(chromosome, input);
+            Assert.False(result.IsFeasible);
+            Assert.True(result.HardViolationCount > 0);
+        }
+
+        [Fact]
+        public void Test10_EquipmentMaintenanceProblem_DueForMaintenance()
+        {
+            var input = CreateBaseInput();
+            input.EquipmentInstances.First().UsageHoursSinceLastMaintenance = 150d; // Exceeds 100h base interval
+
+            var calculator = CreateFitnessCalculator();
+            var chromosome = new AllocationChromosome
+            {
+                Genes = new List<AllocationGene>
+                {
+                    new AllocationGene
+                    {
+                        PhaseId = 1,
+                        StartDate = new DateTime(2026, 6, 1),
+                        EndDate = new DateTime(2026, 6, 5),
+                        LandId = 10,
+                        AssignedHumanResourceIds = new List<int> { 20 },
+                        EquipmentAssignments = new List<EquipmentAssignmentGene>
+                        {
+                            new EquipmentAssignmentGene
+                            {
+                                PhaseEquipmentRequirementId = 300,
+                                RequiredEquipmentTypeId = 6,
+                                AllocatedEquipmentTypeId = 6,
+                                EquipmentInstanceId = 30
+                            }
+                        }
+                    }
+                }
+            };
+
+            var result = calculator.Evaluate(chromosome, input);
+            Assert.False(result.IsFeasible);
+            Assert.Contains("due for maintenance", result.ConstraintReport.MaintenanceConflicts.FirstOrDefault() ?? "");
+        }
+
+        [Fact]
+        public void Test11_ScheduleOverlap_PhasePrecedence()
+        {
+            var input = CreateBaseInput();
+            var phase2 = new ExperimentPhase
+            {
+                PhaseId = 2,
+                ExperimentId = 1,
+                PhaseName = "Planting",
+                PhaseOrder = 2,
+                ExpectedStartDate = new DateTime(2026, 6, 6),
+                ExpectedEndDate = new DateTime(2026, 6, 10)
+            };
+            input.ExperimentPhases = new[] { input.ExperimentPhases.First(), phase2 };
+
+            var calculator = CreateFitnessCalculator();
+            var chromosome = new AllocationChromosome
+            {
+                Genes = new List<AllocationGene>
+                {
+                    new AllocationGene
+                    {
+                        PhaseId = 1,
+                        StartDate = new DateTime(2026, 6, 1),
+                        EndDate = new DateTime(2026, 6, 8),
+                        LandId = 10,
+                        AssignedHumanResourceIds = new List<int> { 20 }
+                    },
+                    new AllocationGene
+                    {
+                        PhaseId = 2,
+                        StartDate = new DateTime(2026, 6, 5), // Starts before Phase 1 ends!
+                        EndDate = new DateTime(2026, 6, 10),
+                        LandId = 10,
+                        AssignedHumanResourceIds = new List<int>()
+                    }
+                }
+            };
+
+            var result = calculator.Evaluate(chromosome, input);
+            Assert.False(result.IsFeasible);
+        }
+
+        [Fact]
+        public void Test12_DeadlineViolation()
+        {
+            var input = CreateBaseInput();
+            input.Experiment.Deadline = new DateTime(2026, 6, 4); // Phase ends June 5, after deadline
+
+            var calculator = CreateFitnessCalculator();
+            var chromosome = new AllocationChromosome
+            {
+                Genes = new List<AllocationGene>
+                {
+                    new AllocationGene
+                    {
+                        PhaseId = 1,
+                        StartDate = new DateTime(2026, 6, 1),
+                        EndDate = new DateTime(2026, 6, 5),
+                        LandId = 10,
+                        AssignedHumanResourceIds = new List<int> { 20 }
+                    }
+                }
+            };
+
+            var result = calculator.Evaluate(chromosome, input);
+            Assert.True(result.SoftViolationCount > 0);
+            Assert.NotEmpty(result.ConstraintReport.DeadlineConflicts);
+        }
+
+        [Fact]
+        public void Test13_HardViolation_PenaltyCalculation()
+        {
+            var input = CreateBaseInput();
+            input.LandResources.First().Status = "Unavailable";
+
+            var calculator = CreateFitnessCalculator();
+            var chromosome = new AllocationChromosome
+            {
+                Genes = new List<AllocationGene>
+                {
+                    new AllocationGene
+                    {
+                        PhaseId = 1,
+                        StartDate = new DateTime(2026, 6, 1),
+                        EndDate = new DateTime(2026, 6, 5),
+                        LandId = 10,
+                        AssignedHumanResourceIds = new List<int> { 20 }
+                    }
+                }
+            };
+
+            var result = calculator.Evaluate(chromosome, input);
+            Assert.False(result.IsFeasible);
+            Assert.DoesNotContain(result.Breakdown.Penalties, p => p.Factor.Contains("Hard Constraint"));
+            Assert.True(result.PenaltyScore <= 0d);
+        }
+
+        [Theory]
+        [InlineData("Reserved")]
+        [InlineData("InUse")]
+        public void Test13B_ReservedAndInUse_FeasibleWhenNoConflict(string landStatus)
+        {
+            var input = CreateBaseInput();
+            input.LandResources.First().Status = landStatus;
+
+            var calculator = CreateFitnessCalculator();
+            var chromosome = new AllocationChromosome
+            {
+                Genes = new List<AllocationGene>
+                {
+                    new AllocationGene
+                    {
+                        PhaseId = 1,
+                        StartDate = new DateTime(2026, 6, 1),
+                        EndDate = new DateTime(2026, 6, 5),
+                        LandId = 10,
+                        AssignedHumanResourceIds = new List<int> { 20 }
+                    }
+                }
+            };
+
+            var result = calculator.Evaluate(chromosome, input);
+            Assert.True(result.IsFeasible);
+            Assert.Empty(result.ConstraintReport.LandConflicts);
+        }
+
+        [Fact]
+        public void Test14_SoftViolation_ConstraintReport()
+        {
+            var input = CreateBaseInput();
+            input.LandResources.First().AreaSize = 250m; // 250m > 100m, waste area soft warning
+
+            var calculator = CreateFitnessCalculator();
+            var chromosome = new AllocationChromosome
+            {
+                Genes = new List<AllocationGene>
+                {
+                    new AllocationGene
+                    {
+                        PhaseId = 1,
+                        StartDate = new DateTime(2026, 6, 1),
+                        EndDate = new DateTime(2026, 6, 5),
+                        LandId = 10,
+                        AssignedHumanResourceIds = new List<int> { 20 }
+                    }
+                }
+            };
+
+            var result = calculator.Evaluate(chromosome, input);
+            Assert.True(result.SoftViolationCount > 0);
+            Assert.True(result.IsFeasible);
+        }
+
+        [Fact]
+        public void Test15_ZeroPenaltyConfiguration_Preserved()
+        {
+            var input = CreateBaseInput();
+            input.Settings.HardConstraintPenalty = 0d;
+            input.Settings.SoftConstraintPenalty = 0d;
+            input.Settings.PenaltyWeight = 0d;
+            input.LandResources.First().Status = "Unavailable";
+
+            var calculator = CreateFitnessCalculator();
+            var chromosome = new AllocationChromosome
+            {
+                Genes = new List<AllocationGene>
+                {
+                    new AllocationGene
+                    {
+                        PhaseId = 1,
+                        StartDate = new DateTime(2026, 6, 1),
+                        EndDate = new DateTime(2026, 6, 5),
+                        LandId = 10,
+                        AssignedHumanResourceIds = new List<int> { 20 }
+                    }
+                }
+            };
+
+            var result = calculator.Evaluate(chromosome, input);
+            Assert.Equal(0d, result.PenaltyScore);
+            Assert.Equal(0d, result.Breakdown.PenaltyScore);
+        }
+
+        [Fact]
+        public void Test16_EquipmentMaintenance_WeightedAggregation()
+        {
+            var input = CreateBaseInput();
+            var calculator = CreateFitnessCalculator();
+
+            var chromosome = new AllocationChromosome
+            {
+                Genes = new List<AllocationGene>
+                {
+                    new AllocationGene
+                    {
+                        PhaseId = 1,
+                        StartDate = new DateTime(2026, 6, 1),
+                        EndDate = new DateTime(2026, 6, 5),
+                        LandId = 10,
+                        AssignedHumanResourceIds = new List<int> { 20 },
+                        EquipmentAssignments = new List<EquipmentAssignmentGene>
+                        {
+                            new EquipmentAssignmentGene
+                            {
+                                PhaseEquipmentRequirementId = 300,
+                                RequiredEquipmentTypeId = 6,
+                                AllocatedEquipmentTypeId = 6,
+                                EquipmentInstanceId = 30,
+                                IsSubstitute = false,
+                                EfficiencyRate = 1.0d,
+                                TimeMultiplier = 1.0d
+                            }
+                        }
+                    }
+                }
+            };
+
+            var result = calculator.Evaluate(chromosome, input);
+
+            Assert.NotNull(result.Breakdown.Equipment.Calculation);
+            Assert.NotNull(result.Breakdown.Maintenance.Calculation);
+            Assert.Contains("40%", result.Breakdown.OverallCalculation);
+            Assert.Contains("15%", result.Breakdown.OverallCalculation);
+        }
+
+        [Fact]
+        public void Test17_MultiPhaseChromosome_LandExplanationNotDuplicated()
+        {
+            var input = CreateBaseInput();
+            var phase2 = new ExperimentPhase
+            {
+                PhaseId = 2,
+                ExperimentId = 1,
+                PhaseName = "Phase 2",
+                PhaseOrder = 2,
+                ExpectedStartDate = new DateTime(2026, 6, 6),
+                ExpectedEndDate = new DateTime(2026, 6, 10)
+            };
+            var phase3 = new ExperimentPhase
+            {
+                PhaseId = 3,
+                ExperimentId = 1,
+                PhaseName = "Phase 3",
+                PhaseOrder = 3,
+                ExpectedStartDate = new DateTime(2026, 6, 11),
+                ExpectedEndDate = new DateTime(2026, 6, 15)
+            };
+            input.ExperimentPhases = new[] { input.ExperimentPhases.First(), phase2, phase3 };
+
+            var calculator = CreateFitnessCalculator();
+
+            // 3 phases all using LandId 10
+            var chromosome = new AllocationChromosome
+            {
+                Genes = new List<AllocationGene>
+                {
+                    new AllocationGene { PhaseId = 1, StartDate = new DateTime(2026, 6, 1), EndDate = new DateTime(2026, 6, 5), LandId = 10, AssignedHumanResourceIds = new List<int> { 20 } },
+                    new AllocationGene { PhaseId = 2, StartDate = new DateTime(2026, 6, 6), EndDate = new DateTime(2026, 6, 10), LandId = 10, AssignedHumanResourceIds = new List<int> { 20 } },
+                    new AllocationGene { PhaseId = 3, StartDate = new DateTime(2026, 6, 11), EndDate = new DateTime(2026, 6, 15), LandId = 10, AssignedHumanResourceIds = new List<int> { 20 } }
+                }
+            };
+
+            var result = calculator.Evaluate(chromosome, input);
+
+            Assert.Equal(3, result.Breakdown.Land.Phases.Count);
+            Assert.Equal(result.Breakdown.Land.Phases.Average(p => p.FinalScore), result.LandScore, 6);
+            Assert.All(result.Breakdown.Land.Phases, phase => Assert.NotEmpty(phase.SubScores));
+        }
+
+        [Fact]
+        public void Test18_TopSuggestions_ContainValidCalculationsAndExplanations()
+        {
+            var input = CreateBaseInput();
+            input.Settings.GenerationCount = 2;
+            input.Settings.PopulationSize = 6;
+            input.Settings.TopSuggestionCount = 5;
+
+            var popGen = new FRPAMSystem.BusinessTier.AI.Generator.PopulationGenerator();
+            var gaService = new FRPAMSystem.BusinessTier.AI.Services.GeneticAlgorithmService(
+                popGen,
+                CreateFitnessCalculator(),
+                new FRPAMSystem.BusinessTier.AI.Operators.Selection.TournamentSelectionOperator(),
+                new FRPAMSystem.BusinessTier.AI.Operators.Crossover.SinglePointCrossoverOperator(),
+                new FRPAMSystem.BusinessTier.AI.Operators.Mutation.AdaptiveMutationOperator(popGen));
+
+            var suggestions = gaService.GenerateSuggestions(input);
+
+            Assert.NotEmpty(suggestions);
+            Assert.True(suggestions.Count <= 5);
+
+            foreach (var suggestion in suggestions)
+            {
+                Assert.NotNull(suggestion.FitnessBreakdown);
+                Assert.NotEmpty(suggestion.FitnessBreakdown.OverallCalculation);
+                Assert.NotEmpty(suggestion.FitnessBreakdown.Land.Calculation);
+                Assert.NotEmpty(suggestion.FitnessBreakdown.Human.Calculation);
+                Assert.NotEmpty(suggestion.FitnessBreakdown.Equipment.Calculation);
+            }
+        }
+
+        [Fact]
+        public void FitnessBreakdownClone_PreservesMaintenanceScore()
+        {
+            var chromosome = new AllocationChromosome
+            {
+                FitnessBreakdown = new FitnessBreakdown { MaintenanceScore = 73.5d }
+            };
+
+            var clone = chromosome.Clone();
+
+            Assert.Equal(73.5d, clone.FitnessBreakdown.MaintenanceScore);
+        }
+
+        [Fact]
+        public void EquipmentWithoutRequirements_ExplainsFullScore()
+        {
+            var input = CreateBaseInput();
+            input.PhaseEquipmentRequirements = Array.Empty<PhaseEquipmentRequirement>();
+            input.ExperimentEquipmentRequirements = Array.Empty<ExperimentEquipmentRequirement>();
+            var chromosome = new AllocationChromosome
+            {
+                Genes = new List<AllocationGene>
+                {
+                    new() { PhaseId = 1, StartDate = new DateTime(2026, 6, 1), EndDate = new DateTime(2026, 6, 5) }
+                }
+            };
+
+            var result = CreateFitnessCalculator().Evaluate(chromosome, input);
+
+            Assert.Equal(100d, result.EquipmentScore);
+            Assert.Contains("100.00", result.Breakdown.Equipment.Phases.Single().Calculation);
+        }
+
+        [Fact]
+        public void ComponentBonuses_AreShownAtPhaseLevel()
+        {
+            var input = CreateBaseInput();
+            input.HumanResources = new[]
+            {
+                input.HumanResources.Single(),
+                new HumanResourceProfile
+                {
+                    HumanResourceId = 21,
+                    Status = "Available",
+                    MaxWorkingHoursPerDay = 8d,
+                    User = new User { UserId = 21, FullName = "Dr. Bob", RoleId = 2 },
+                    HumanResourceSkills = new List<HumanResourceSkill>
+                    {
+                        new() { HumanResourceId = 21, SkillId = 5 }
+                    }
+                }
+            };
+            var chromosome = new AllocationChromosome
+            {
+                Genes = new List<AllocationGene>
+                {
+                    new()
+                    {
+                        PhaseId = 1,
+                        StartDate = new DateTime(2026, 6, 1),
+                        EndDate = new DateTime(2026, 6, 5),
+                        AssignedHumanResourceIds = new List<int> { 20, 21 },
+                        EquipmentAssignments = new List<EquipmentAssignmentGene>
+                        {
+                            new()
+                            {
+                                PhaseEquipmentRequirementId = 300,
+                                RequiredEquipmentTypeId = 6,
+                                AllocatedEquipmentTypeId = 6,
+                                EquipmentInstanceId = 30,
+                                EfficiencyRate = 1d,
+                                TimeMultiplier = 1d
+                            }
+                        }
+                    }
+                }
+            };
+
+            var result = CreateFitnessCalculator().Evaluate(chromosome, input);
+
+            Assert.Contains(result.Breakdown.Human.Phases.Single().Bonuses,
+                bonus => bonus.Factor == "Human Workload Balance");
+            Assert.Contains(result.Breakdown.Maintenance.Phases.Single().Bonuses,
+                bonus => bonus.Factor == "Equipment Maintenance Health");
+        }
+
+        [Fact]
+        public void SoftPenalty_UsesConfiguredPenaltyPerViolation_NotLegacyMultiplier()
+        {
+            var input = CreateBaseInput();
+            input.Settings.SoftConstraintPenalty = 5d;
+            input.Settings.PenaltyWeight = 0d;
+            input.LandResources.First().AreaSize = 250m;
+
+            var chromosome = new AllocationChromosome
+            {
+                Genes = new List<AllocationGene>
+                {
+                    new()
+                    {
+                        PhaseId = 1,
+                        LandId = 10,
+                        ExperimentLandRequirementId = 100,
+                        StartDate = new DateTime(2026, 6, 1),
+                        EndDate = new DateTime(2026, 6, 5)
+                    }
+                }
+            };
+
+            var result = CreateFitnessCalculator().Evaluate(chromosome, input);
+
+            Assert.Equal(result.SoftViolationCount * 5d, -result.PenaltyScore);
+        }
+
+        [Fact]
+        public void LandWithoutRequirement_IsNeutralWhenNoLandIsAssigned()
+        {
+            var input = CreateBaseInput();
+            input.ExperimentLandRequirements = Array.Empty<ExperimentLandRequirement>();
+            var chromosome = new AllocationChromosome
+            {
+                Genes = new List<AllocationGene>
+                {
+                    new()
+                    {
+                        PhaseId = 1,
+                        StartDate = new DateTime(2026, 6, 1),
+                        EndDate = new DateTime(2026, 6, 5)
+                    }
+                }
+            };
+
+            var result = CreateFitnessCalculator().Evaluate(chromosome, input);
+
+            Assert.DoesNotContain(result.ConstraintReport.LandConflicts,
+                conflict => conflict.Contains("no valid land allocation", StringComparison.OrdinalIgnoreCase));
+            Assert.Equal(100d, result.LandScore);
+        }
+
+        [Fact]
+        public void SubstitutionWithoutMapping_IsHardInvalid()
+        {
+            var input = CreateBaseInput();
+            input.ExperimentEquipmentRequirements = new[]
+            {
+                new ExperimentEquipmentRequirement
+                {
+                    ExpEquipmentReqId = 400,
+                    EquipmentTypeId = 6,
+                    AllowSubstitute = true,
+                    MinAcceptableEfficiency = 0.7d,
+                    Quantity = 1
+                }
+            };
+            input.PhaseEquipmentRequirements = new[]
+            {
+                new PhaseEquipmentRequirement
+                {
+                    PhaseEquipmentReqId = 300,
+                    PhaseId = 1,
+                    EquipmentTypeId = 6,
+                    Quantity = 1
+                }
+            };
+
+            var chromosome = new AllocationChromosome
+            {
+                Genes = new List<AllocationGene>
+                {
+                    new()
+                    {
+                        PhaseId = 1,
+                        StartDate = new DateTime(2026, 6, 1),
+                        EndDate = new DateTime(2026, 6, 5),
+                        EquipmentAssignments = new List<EquipmentAssignmentGene>
+                        {
+                            new()
+                            {
+                                PhaseEquipmentRequirementId = 300,
+                                RequiredEquipmentTypeId = 6,
+                                AllocatedEquipmentTypeId = 7,
+                                EquipmentInstanceId = 30,
+                                IsSubstitute = true,
+                                EfficiencyRate = 0.9d,
+                                TimeMultiplier = 1.1d
+                            }
+                        }
+                    }
+                }
+            };
+
+            var result = CreateFitnessCalculator().Evaluate(chromosome, input);
+
+            Assert.True(result.HardViolationCount > 0);
+            Assert.False(result.IsFeasible);
+        }
+
+        [Fact]
+        public void UnknownEquipmentCondition_DoesNotDefaultToFair()
+        {
+            var input = CreateBaseInput();
+            input.EquipmentInstances.Single().ConditionLevel = "Unknown";
+            var chromosome = new AllocationChromosome
+            {
+                Genes = new List<AllocationGene>
+                {
+                    new()
+                    {
+                        PhaseId = 1,
+                        StartDate = new DateTime(2026, 6, 1),
+                        EndDate = new DateTime(2026, 6, 5),
+                        EquipmentAssignments = new List<EquipmentAssignmentGene>
+                        {
+                            new()
+                            {
+                                PhaseEquipmentRequirementId = 300,
+                                RequiredEquipmentTypeId = 6,
+                                AllocatedEquipmentTypeId = 6,
+                                EquipmentInstanceId = 30,
+                                EfficiencyRate = 1d,
+                                TimeMultiplier = 1d
+                            }
+                        }
+                    }
+                }
+            };
+
+            var result = CreateFitnessCalculator().Evaluate(chromosome, input);
+            var condition = result.Breakdown.Equipment.Phases.Single().SubScores
+                .Single(score => score.Factor == "Equipment Condition");
+
+            Assert.Equal(0d, condition.Points);
+        }
+
+        [Fact]
+        public void PopulationGenerator_UsesOneLandForEveryPhase()
+        {
+            var input = CreateBaseInput();
+            input.ExperimentPhases = new[]
+            {
+                input.ExperimentPhases.Single(),
+                new ExperimentPhase
+                {
+                    PhaseId = 2,
+                    ExperimentId = 1,
+                    PhaseOrder = 2,
+                    ExpectedStartDate = new DateTime(2026, 6, 6),
+                    ExpectedEndDate = new DateTime(2026, 6, 10)
+                }
+            };
+            input.LandResources = new[]
+            {
+                input.LandResources.Single(),
+                new LandResource
+                {
+                    LandId = 11,
+                    LandCode = "LND-02",
+                    SoilType = "Loam",
+                    AreaSize = 100m,
+                    Status = "Available"
+                }
+            };
+            input.Settings.PopulationSize = 20;
+
+            var population = new PopulationGenerator(new Random(7)).Generate(input);
+
+            Assert.NotEmpty(population.Chromosomes);
+            Assert.All(population.Chromosomes, chromosome =>
+                Assert.True(chromosome.Genes.Select(g => g.LandId).Distinct().Count() <= 1));
+        }
+
+        [Fact]
+        public void LandExplanation_DeduplicatesRepeatedTopLevelAdjustments()
+        {
+            var input = CreateBaseInput();
+            input.ExperimentPhases = new[]
+            {
+                input.ExperimentPhases.Single(),
+                new ExperimentPhase
+                {
+                    PhaseId = 2,
+                    ExperimentId = 1,
+                    PhaseOrder = 2,
+                    ExpectedStartDate = new DateTime(2026, 6, 6),
+                    ExpectedEndDate = new DateTime(2026, 6, 10)
+                }
+            };
+            input.LandResources.Single().SoilType = "Clay";
+            var chromosome = new AllocationChromosome
+            {
+                Genes = new List<AllocationGene>
+                {
+                    new() { PhaseId = 1, LandId = 10, ExperimentLandRequirementId = 100, StartDate = new DateTime(2026, 6, 1), EndDate = new DateTime(2026, 6, 5) },
+                    new() { PhaseId = 2, LandId = 10, ExperimentLandRequirementId = 100, StartDate = new DateTime(2026, 6, 6), EndDate = new DateTime(2026, 6, 10) }
+                }
+            };
+
+            var result = CreateFitnessCalculator().Evaluate(chromosome, input);
+
+            Assert.Equal(2, result.Breakdown.Land.Phases.Count);
+            Assert.Single(result.Breakdown.Land.Adjustments, a => a.Factor == "Soil Mismatch");
+        }
+
+        private sealed class ScheduleOnlyEvaluator : IConstraintEvaluator
+        {
+            public string Category => "Schedule";
+
+            public ConstraintEvaluationResult Evaluate(
+                AllocationChromosome chromosome,
+                OptimizationInput input)
+            {
+                return new ConstraintEvaluationResult
+                {
+                    Score = 0d,
+                    Penalty = 100d,
+                    Bonus = 100d,
+                    Violations = new List<ConstraintViolation>
+                    {
+                        new("Schedule", ConstraintSeverity.Hard, "Schedule quality must not affect GA fitness.")
+                    }
+                };
+            }
+        }
+    }
+}

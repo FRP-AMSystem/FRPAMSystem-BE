@@ -17,5 +17,11 @@ namespace FRPAMSystem.BusinessTier.Services.Interface
         Task<ExperimentPhaseResponse?> UpdateExperimentPhaseAsync(int id, ExperimentPhaseRequest request);
 
         Task<bool> DeleteExperimentPhaseAsync(int id);
+
+        Task<ExperimentPhaseResponse?> StartExperimentPhaseAsync(int id, int? currentUserId);
+
+        Task<ExperimentPhaseResponse?> CompleteExperimentPhaseAsync(int id, int? currentUserId);
+
+        Task<ExperimentPhaseResponse?> CancelExperimentPhaseAsync(int id, int? currentUserId, string? reason = null);
     }
 }

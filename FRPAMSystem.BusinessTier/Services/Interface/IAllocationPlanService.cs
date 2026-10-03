@@ -44,5 +44,12 @@ namespace FRPAMSystem.BusinessTier.Services.Interface
         Task<AllocationPlanResponse?> EvaluatePlanFitnessAsync(
             int id,
             AI.Models.OptimizationSettings? settings = null);
+
+        Task<SimulatePlanFitnessResponse> SimulatePlanFitnessAsync(
+            SimulatePlanFitnessRequest request);
+
+        Task<AllocationPlanResponse> CreateAllocationPlanWithDetailsAsync(
+            CreateAllocationPlanWithDetailsRequest request,
+            int? currentUserId);
     }
 }

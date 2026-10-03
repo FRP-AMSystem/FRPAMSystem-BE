@@ -1,4 +1,4 @@
-﻿using FRPAMSystem.BusinessTier.Constants;
+using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.Payload.AllocationLandDetail;
 using FRPAMSystem.DataTier.Paginate;
 using System;
@@ -25,5 +25,8 @@ namespace FRPAMSystem.BusinessTier.Services.Interface
             AllocationLandDetailRequest request);
 
         Task<bool> DeleteAllocationLandDetailAsync(int id);
+
+        Task<List<AvailableLandResponse>> GetAvailableLandsAsync(
+            AvailableLandFilter filter);
     }
 }

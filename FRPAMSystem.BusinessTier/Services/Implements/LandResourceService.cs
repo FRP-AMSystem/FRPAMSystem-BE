@@ -1,6 +1,8 @@
 using FRPAMSystem.BusinessTier.Constants;
+using FRPAMSystem.BusinessTier.Enums;
 using FRPAMSystem.BusinessTier.Payload.LandResource;
 using FRPAMSystem.BusinessTier.Services.Interface;
+using FRPAMSystem.DataTier.Abstractions;
 using FRPAMSystem.DataTier.Models;
 using FRPAMSystem.DataTier.Paginate;
 using FRPAMSystem.DataTier.Repository.Interfaces;
@@ -11,10 +13,12 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
     public class LandResourceService : ILandResourceService
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IClock? _clock;
 
-        public LandResourceService(IUnitOfWork unitOfWork)
+        public LandResourceService(IUnitOfWork unitOfWork, IClock? clock = null)
         {
             _unitOfWork = unitOfWork;
+            _clock = clock;
         }
 
         public async Task<IPaginate<LandResourceResponse>> ViewAllLandResourcesAsync(
@@ -50,6 +54,8 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
 
         public async Task<LandResourceResponse?> GetLandResourceByIdAsync(int id)
         {
+            await SyncLandStatusAsync(id);
+
             var landResource = await _unitOfWork
                 .GetRepository<LandResource>()
                 .FirstOrDefaultAsync(
@@ -82,6 +88,11 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             await _unitOfWork.GetRepository<LandResource>().InsertAsync(landResource);
             await _unitOfWork.CommitAsync();
 
+            if (request.Status != LandResourceStatus.Unavailable)
+            {
+                await SyncLandStatusAsync(landResource.LandId);
+            }
+
             return (await GetLandResourceByIdAsync(landResource.LandId))!;
         }
 
@@ -109,9 +120,15 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             landResource.Location = request.Location;
             landResource.SoilType = request.SoilType.Trim();
             landResource.Status = request.Status.ToString();
+            landResource.UpdatedAt = _clock?.Now ?? DateTime.UtcNow;
 
             _unitOfWork.GetRepository<LandResource>().Update(landResource);
             await _unitOfWork.CommitAsync();
+
+            if (request.Status != LandResourceStatus.Unavailable)
+            {
+                await SyncLandStatusAsync(id);
+            }
 
             return await GetLandResourceByIdAsync(id);
         }
@@ -136,8 +153,82 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             return true;
         }
 
+        public async Task SyncLandStatusesAsync(IEnumerable<int> landIds)
+        {
+            var distinctIds = landIds.Distinct().ToList();
+            foreach (var id in distinctIds)
+            {
+                await SyncLandStatusAsync(id);
+            }
+        }
+
+        public async Task SyncLandStatusAsync(int landId)
+        {
+            var landResource = await _unitOfWork
+                .GetRepository<LandResource>()
+                .FirstOrDefaultAsync(
+                    predicate: l => l.LandId == landId,
+                    asNoTracking: false
+                );
+
+            if (landResource == null)
+            {
+                return;
+            }
+
+            // Do not overwrite administrative Unavailable status
+            if (string.Equals(landResource.Status, LandResourceStatus.Unavailable.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            var now = _clock?.Now ?? DateTime.UtcNow;
+            var today = now.Date;
+            var cancelledDetailStatus = AllocationDetailStatus.Cancelled.ToString();
+            var completedDetailStatus = AllocationDetailStatus.Completed.ToString();
+            var approvedPlanStatus = AllocationPlanStatus.Approved.ToString();
+
+            var activeAllocations = await _unitOfWork
+                .GetRepository<AllocationLandDetail>()
+                .GetQueryable()
+                .Include(d => d.AllocationPlan)
+                .Where(d => d.LandId == landId &&
+                            d.Status != cancelledDetailStatus &&
+                            d.Status != completedDetailStatus &&
+                            d.AllocationPlan.ApproveStatus == approvedPlanStatus)
+                .ToListAsync();
+
+            string targetStatus;
+            if (activeAllocations.Any(d => d.Status == AllocationDetailStatus.InUse.ToString() ||
+                                           (d.StartDate.Date <= today && today <= d.EndDate.Date)))
+            {
+                targetStatus = LandResourceStatus.InUse.ToString();
+            }
+            else if (activeAllocations.Any(d => d.EndDate.Date >= today))
+            {
+                targetStatus = LandResourceStatus.Reserved.ToString();
+            }
+            else
+            {
+                targetStatus = LandResourceStatus.Available.ToString();
+            }
+
+            if (!string.Equals(landResource.Status, targetStatus, StringComparison.OrdinalIgnoreCase))
+            {
+                landResource.Status = targetStatus;
+                landResource.UpdatedAt = now;
+                _unitOfWork.GetRepository<LandResource>().Update(landResource);
+                await _unitOfWork.CommitAsync();
+            }
+        }
+
         private async Task ValidateRequestAsync(LandResourceRequest request, int? excludeId = null)
         {
+            if (!Enum.IsDefined(typeof(LandResourceStatus), request.Status))
+            {
+                throw new Exception($"Invalid land resource status '{request.Status}'.");
+            }
+
             if (string.IsNullOrWhiteSpace(request.LandCode))
             {
                 throw new Exception("Land code is required.");
@@ -175,6 +266,28 @@ namespace FRPAMSystem.BusinessTier.Services.Implements
             if (await duplicateCodeQuery.AnyAsync())
             {
                 throw new Exception("Land code already exists.");
+            }
+
+            if (excludeId.HasValue && request.Status == LandResourceStatus.Unavailable)
+            {
+                var today = (_clock?.Now ?? DateTime.UtcNow).Date;
+                var inUseStatus = AllocationDetailStatus.InUse.ToString();
+                var allocatedStatus = AllocationDetailStatus.Allocated.ToString();
+                var approvedPlanStatus = AllocationPlanStatus.Approved.ToString();
+
+                var hasActiveAllocation = await _unitOfWork
+                    .GetRepository<AllocationLandDetail>()
+                    .GetQueryable()
+                    .Include(d => d.AllocationPlan)
+                    .AnyAsync(d => d.LandId == excludeId.Value &&
+                                   d.AllocationPlan.ApproveStatus == approvedPlanStatus &&
+                                   (d.Status == inUseStatus ||
+                                    (d.Status == allocatedStatus && d.StartDate.Date <= today && today <= d.EndDate.Date)));
+
+                if (hasActiveAllocation)
+                {
+                    throw new Exception("Cannot set land to Unavailable while it is actively in use by an approved allocation.");
+                }
             }
         }
 

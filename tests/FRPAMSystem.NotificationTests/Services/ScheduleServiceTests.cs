@@ -327,5 +327,389 @@ namespace FRPAMSystem.NotificationTests.Services
             // Assert
             Assert.False(result);
         }
+
+        [Fact]
+        public async Task CreateScheduleAsync_WhenStartDateIsTodayOrPast_ShouldSetStatusToInProgress()
+        {
+            // Arrange
+            var request = new ScheduleRequest
+            {
+                AllocationPlanId = 10,
+                Title = "Immediate Field Task",
+                StartDate = new DateTime(2026, 8, 20),
+                EndDate = new DateTime(2026, 8, 25),
+                Priority = 1,
+                CreatedBy = 1
+            };
+
+            _planRepoMock.Setup(r => r.AnyAsync(It.IsAny<Expression<Func<AllocationPlan, bool>>>())).ReturnsAsync(true);
+            _userRepoMock.Setup(r => r.AnyAsync(It.IsAny<Expression<Func<User, bool>>>())).ReturnsAsync(true);
+
+            Schedule? savedSchedule = null;
+            _scheduleRepoMock.Setup(r => r.InsertAsync(It.IsAny<Schedule>()))
+                .Callback<Schedule>(s => { s.ScheduleId = 105; savedSchedule = s; })
+                .Returns(Task.CompletedTask);
+
+            _scheduleRepoMock.Setup(r => r.FirstOrDefaultAsync(
+                    It.IsAny<Expression<Func<Schedule, bool>>>(),
+                    It.IsAny<Func<IQueryable<Schedule>, IOrderedQueryable<Schedule>>>(),
+                    It.IsAny<Func<IQueryable<Schedule>, IIncludableQueryable<Schedule, object>>>(),
+                    It.IsAny<bool>()))
+                .ReturnsAsync(() => savedSchedule);
+
+            var service = new ScheduleService(_unitOfWorkMock.Object, _domainEventDispatcherMock.Object, _clockMock.Object);
+
+            // Act
+            var result = await service.CreateScheduleAsync(request);
+
+            // Assert
+            Assert.NotNull(savedSchedule);
+            Assert.Equal(ScheduleStatus.InProgress.ToString(), savedSchedule.Status);
+        }
+
+        [Fact]
+        public async Task CreateScheduleAsync_WhenStartDateIsInFuture_ShouldSetStatusToPlanned()
+        {
+            // Arrange
+            var request = new ScheduleRequest
+            {
+                AllocationPlanId = 10,
+                Title = "Future Task",
+                StartDate = new DateTime(2026, 9, 1),
+                EndDate = new DateTime(2026, 9, 10),
+                Priority = 1,
+                CreatedBy = 1
+            };
+
+            _planRepoMock.Setup(r => r.AnyAsync(It.IsAny<Expression<Func<AllocationPlan, bool>>>())).ReturnsAsync(true);
+            _userRepoMock.Setup(r => r.AnyAsync(It.IsAny<Expression<Func<User, bool>>>())).ReturnsAsync(true);
+
+            Schedule? savedSchedule = null;
+            _scheduleRepoMock.Setup(r => r.InsertAsync(It.IsAny<Schedule>()))
+                .Callback<Schedule>(s => { s.ScheduleId = 106; savedSchedule = s; })
+                .Returns(Task.CompletedTask);
+
+            _scheduleRepoMock.Setup(r => r.FirstOrDefaultAsync(
+                    It.IsAny<Expression<Func<Schedule, bool>>>(),
+                    It.IsAny<Func<IQueryable<Schedule>, IOrderedQueryable<Schedule>>>(),
+                    It.IsAny<Func<IQueryable<Schedule>, IIncludableQueryable<Schedule, object>>>(),
+                    It.IsAny<bool>()))
+                .ReturnsAsync(() => savedSchedule);
+
+            var service = new ScheduleService(_unitOfWorkMock.Object, _domainEventDispatcherMock.Object, _clockMock.Object);
+
+            // Act
+            var result = await service.CreateScheduleAsync(request);
+
+            // Assert
+            Assert.NotNull(savedSchedule);
+            Assert.Equal(ScheduleStatus.Planned.ToString(), savedSchedule.Status);
+        }
+
+        [Fact]
+        public async Task AutoSyncInProgressSchedulesAsync_ShouldTransitionDuePlannedSchedulesToInProgress()
+        {
+            // Arrange
+            var dueSchedule = new Schedule
+            {
+                ScheduleId = 1,
+                Title = "Due Schedule",
+                StartDate = new DateTime(2026, 8, 20),
+                Status = ScheduleStatus.Planned.ToString()
+            };
+
+            _scheduleRepoMock.Setup(r => r.GetListAsync(
+                    It.IsAny<Expression<Func<Schedule, bool>>>(),
+                    It.IsAny<Func<IQueryable<Schedule>, IOrderedQueryable<Schedule>>>(),
+                    It.IsAny<Func<IQueryable<Schedule>, IIncludableQueryable<Schedule, object>>>(),
+                    false))
+                .ReturnsAsync(new List<Schedule> { dueSchedule });
+
+            var service = new ScheduleService(_unitOfWorkMock.Object, _domainEventDispatcherMock.Object, _clockMock.Object);
+
+            // Act
+            await service.AutoSyncInProgressSchedulesAsync();
+
+            // Assert
+            Assert.Equal(ScheduleStatus.InProgress.ToString(), dueSchedule.Status);
+            _scheduleRepoMock.Verify(r => r.Update(dueSchedule), Times.Once);
+            _unitOfWorkMock.Verify(u => u.CommitAsync(), Times.Once);
+        }
+
+        [Fact]
+        public async Task CompleteScheduleAsync_ByAssignedWorker_ShouldMarkCompletedAndAppendNotes()
+        {
+            // Arrange
+            int scheduleId = 201;
+            int userId = 10;
+            int hrId = 5;
+
+            var schedule = new Schedule
+            {
+                ScheduleId = scheduleId,
+                Title = "Field Spraying",
+                AssignedHumanResourceId = hrId,
+                Status = ScheduleStatus.InProgress.ToString(),
+                Notes = "Initial setup done"
+            };
+
+            var user = new User
+            {
+                UserId = userId,
+                Role = new Role { RoleName = "Seasonal" }
+            };
+
+            var hrProfile = new HumanResourceProfile
+            {
+                HumanResourceId = hrId,
+                UserId = userId
+            };
+
+            _scheduleRepoMock.Setup(r => r.FirstOrDefaultAsync(
+                    It.Is<Expression<Func<Schedule, bool>>>(exp => true),
+                    It.IsAny<Func<IQueryable<Schedule>, IOrderedQueryable<Schedule>>>(),
+                    It.IsAny<Func<IQueryable<Schedule>, IIncludableQueryable<Schedule, object>>>(),
+                    It.IsAny<bool>()))
+                .ReturnsAsync(schedule);
+
+            _userRepoMock.Setup(r => r.FirstOrDefaultAsync(
+                    It.IsAny<Expression<Func<User, bool>>>(),
+                    It.IsAny<Func<IQueryable<User>, IOrderedQueryable<User>>>(),
+                    It.IsAny<Func<IQueryable<User>, IIncludableQueryable<User, object>>>(),
+                    It.IsAny<bool>()))
+                .ReturnsAsync(user);
+
+            _hrRepoMock.Setup(r => r.FirstOrDefaultAsync(
+                    It.IsAny<Expression<Func<HumanResourceProfile, bool>>>(),
+                    It.IsAny<Func<IQueryable<HumanResourceProfile>, IOrderedQueryable<HumanResourceProfile>>>(),
+                    It.IsAny<Func<IQueryable<HumanResourceProfile>, IIncludableQueryable<HumanResourceProfile, object>>>(),
+                    It.IsAny<bool>()))
+                .ReturnsAsync(hrProfile);
+
+            var service = new ScheduleService(_unitOfWorkMock.Object, _domainEventDispatcherMock.Object, _clockMock.Object);
+
+            // Act
+            var result = await service.CompleteScheduleAsync(scheduleId, userId, new CompleteScheduleRequest { Notes = "Completed without issues." });
+
+            // Assert
+            Assert.Equal(ScheduleStatus.Completed.ToString(), schedule.Status);
+            Assert.Contains("[Completion report]: Completed without issues.", schedule.Notes);
+            _scheduleRepoMock.Verify(r => r.Update(schedule), Times.Once);
+            _unitOfWorkMock.Verify(u => u.CommitAsync(), Times.Once);
+        }
+
+        [Fact]
+        public async Task CompleteScheduleAsync_ByFieldWorker_WhenNotAssigned_ShouldThrowException()
+        {
+            // Arrange
+            int scheduleId = 202;
+            int userId = 10;
+            int hrId = 5;
+
+            var schedule = new Schedule
+            {
+                ScheduleId = scheduleId,
+                Title = "Field Spraying",
+                AssignedHumanResourceId = 99, // Assigned to someone else!
+                Status = ScheduleStatus.InProgress.ToString()
+            };
+
+            var user = new User
+            {
+                UserId = userId,
+                Role = new Role { RoleName = "Technician" }
+            };
+
+            var hrProfile = new HumanResourceProfile
+            {
+                HumanResourceId = hrId,
+                UserId = userId
+            };
+
+            _scheduleRepoMock.Setup(r => r.FirstOrDefaultAsync(
+                    It.IsAny<Expression<Func<Schedule, bool>>>(),
+                    It.IsAny<Func<IQueryable<Schedule>, IOrderedQueryable<Schedule>>>(),
+                    It.IsAny<Func<IQueryable<Schedule>, IIncludableQueryable<Schedule, object>>>(),
+                    It.IsAny<bool>()))
+                .ReturnsAsync(schedule);
+
+            _userRepoMock.Setup(r => r.FirstOrDefaultAsync(
+                    It.IsAny<Expression<Func<User, bool>>>(),
+                    It.IsAny<Func<IQueryable<User>, IOrderedQueryable<User>>>(),
+                    It.IsAny<Func<IQueryable<User>, IIncludableQueryable<User, object>>>(),
+                    It.IsAny<bool>()))
+                .ReturnsAsync(user);
+
+            _hrRepoMock.Setup(r => r.FirstOrDefaultAsync(
+                    It.IsAny<Expression<Func<HumanResourceProfile, bool>>>(),
+                    It.IsAny<Func<IQueryable<HumanResourceProfile>, IOrderedQueryable<HumanResourceProfile>>>(),
+                    It.IsAny<Func<IQueryable<HumanResourceProfile>, IIncludableQueryable<HumanResourceProfile, object>>>(),
+                    It.IsAny<bool>()))
+                .ReturnsAsync(hrProfile);
+
+            var service = new ScheduleService(_unitOfWorkMock.Object, _domainEventDispatcherMock.Object, _clockMock.Object);
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<Exception>(() => service.CompleteScheduleAsync(scheduleId, userId, new CompleteScheduleRequest()));
+            Assert.Equal("You are only authorized to complete schedules assigned to you.", ex.Message);
+        }
+
+        [Fact]
+        public async Task CompleteScheduleAsync_WhenScheduleIsCancelled_ShouldThrowException()
+        {
+            // Arrange
+            int scheduleId = 203;
+            var schedule = new Schedule
+            {
+                ScheduleId = scheduleId,
+                Status = ScheduleStatus.Cancelled.ToString()
+            };
+
+            _scheduleRepoMock.Setup(r => r.FirstOrDefaultAsync(
+                    It.IsAny<Expression<Func<Schedule, bool>>>(),
+                    It.IsAny<Func<IQueryable<Schedule>, IOrderedQueryable<Schedule>>>(),
+                    It.IsAny<Func<IQueryable<Schedule>, IIncludableQueryable<Schedule, object>>>(),
+                    It.IsAny<bool>()))
+                .ReturnsAsync(schedule);
+
+            _userRepoMock.Setup(r => r.FirstOrDefaultAsync(
+                    It.IsAny<Expression<Func<User, bool>>>(),
+                    It.IsAny<Func<IQueryable<User>, IOrderedQueryable<User>>>(),
+                    It.IsAny<Func<IQueryable<User>, IIncludableQueryable<User, object>>>(),
+                    It.IsAny<bool>()))
+                .ReturnsAsync(new User { Role = new Role { RoleName = "Researcher" } });
+
+            var service = new ScheduleService(_unitOfWorkMock.Object, _domainEventDispatcherMock.Object, _clockMock.Object);
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<Exception>(() => service.CompleteScheduleAsync(scheduleId, 1, new CompleteScheduleRequest()));
+            Assert.Equal("Cannot complete a cancelled schedule.", ex.Message);
+        }
+
+        [Fact]
+        public async Task CancelScheduleAsync_WhenScheduleIsCompleted_ShouldThrowException()
+        {
+            // Arrange
+            int scheduleId = 204;
+            var schedule = new Schedule
+            {
+                ScheduleId = scheduleId,
+                Status = ScheduleStatus.Completed.ToString()
+            };
+
+            _scheduleRepoMock.Setup(r => r.FirstOrDefaultAsync(
+                    It.IsAny<Expression<Func<Schedule, bool>>>(),
+                    It.IsAny<Func<IQueryable<Schedule>, IOrderedQueryable<Schedule>>>(),
+                    It.IsAny<Func<IQueryable<Schedule>, IIncludableQueryable<Schedule, object>>>(),
+                    It.IsAny<bool>()))
+                .ReturnsAsync(schedule);
+
+            var service = new ScheduleService(_unitOfWorkMock.Object, _domainEventDispatcherMock.Object, _clockMock.Object);
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<Exception>(() => service.CancelScheduleAsync(scheduleId, 1, new CancelScheduleRequest()));
+            Assert.Equal("Cannot cancel a completed schedule.", ex.Message);
+        }
+
+        [Fact]
+        public async Task CancelScheduleAsync_WhenScheduleIsInProgressOrPlanned_ShouldSetCancelledAndAppendReason()
+        {
+            // Arrange
+            int scheduleId = 205;
+            var schedule = new Schedule
+            {
+                ScheduleId = scheduleId,
+                Status = ScheduleStatus.InProgress.ToString(),
+                Notes = "Existing notes"
+            };
+
+            _scheduleRepoMock.Setup(r => r.FirstOrDefaultAsync(
+                    It.IsAny<Expression<Func<Schedule, bool>>>(),
+                    It.IsAny<Func<IQueryable<Schedule>, IOrderedQueryable<Schedule>>>(),
+                    It.IsAny<Func<IQueryable<Schedule>, IIncludableQueryable<Schedule, object>>>(),
+                    It.IsAny<bool>()))
+                .ReturnsAsync(schedule);
+
+            var service = new ScheduleService(_unitOfWorkMock.Object, _domainEventDispatcherMock.Object, _clockMock.Object);
+
+            // Act
+            var result = await service.CancelScheduleAsync(scheduleId, 1, new CancelScheduleRequest { Reason = "Bad weather conditions" });
+
+            // Assert
+            Assert.Equal(ScheduleStatus.Cancelled.ToString(), schedule.Status);
+            Assert.Contains("[Cancelled reason]: Bad weather conditions", schedule.Notes);
+            _scheduleRepoMock.Verify(r => r.Update(schedule), Times.Once);
+            _unitOfWorkMock.Verify(u => u.CommitAsync(), Times.Once);
+        }
+
+        [Fact]
+        public async Task UpdateScheduleAsync_WhenScheduleIsCompleted_CannotChangeStatus()
+        {
+            // Arrange
+            int scheduleId = 206;
+            var schedule = new Schedule
+            {
+                ScheduleId = scheduleId,
+                Status = ScheduleStatus.Completed.ToString()
+            };
+
+            var request = new ScheduleRequest
+            {
+                AllocationPlanId = 10,
+                Title = "Completed Task",
+                StartDate = new DateTime(2026, 8, 20),
+                EndDate = new DateTime(2026, 8, 25),
+                Status = ScheduleStatus.InProgress
+            };
+
+            _planRepoMock.Setup(r => r.AnyAsync(It.IsAny<Expression<Func<AllocationPlan, bool>>>())).ReturnsAsync(true);
+            _scheduleRepoMock.Setup(r => r.FirstOrDefaultAsync(
+                    It.IsAny<Expression<Func<Schedule, bool>>>(),
+                    It.IsAny<Func<IQueryable<Schedule>, IOrderedQueryable<Schedule>>>(),
+                    It.IsAny<Func<IQueryable<Schedule>, IIncludableQueryable<Schedule, object>>>(),
+                    It.IsAny<bool>()))
+                .ReturnsAsync(schedule);
+
+            var service = new ScheduleService(_unitOfWorkMock.Object, _domainEventDispatcherMock.Object, _clockMock.Object);
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<Exception>(() => service.UpdateScheduleAsync(scheduleId, request));
+            Assert.Equal("Cannot change status of a completed schedule.", ex.Message);
+        }
+
+        [Fact]
+        public async Task UpdateScheduleAsync_WhenScheduleIsCancelled_CannotChangeStatus()
+        {
+            // Arrange
+            int scheduleId = 207;
+            var schedule = new Schedule
+            {
+                ScheduleId = scheduleId,
+                Status = ScheduleStatus.Cancelled.ToString()
+            };
+
+            var request = new ScheduleRequest
+            {
+                AllocationPlanId = 10,
+                Title = "Cancelled Task",
+                StartDate = new DateTime(2026, 8, 20),
+                EndDate = new DateTime(2026, 8, 25),
+                Status = ScheduleStatus.Planned
+            };
+
+            _planRepoMock.Setup(r => r.AnyAsync(It.IsAny<Expression<Func<AllocationPlan, bool>>>())).ReturnsAsync(true);
+            _scheduleRepoMock.Setup(r => r.FirstOrDefaultAsync(
+                    It.IsAny<Expression<Func<Schedule, bool>>>(),
+                    It.IsAny<Func<IQueryable<Schedule>, IOrderedQueryable<Schedule>>>(),
+                    It.IsAny<Func<IQueryable<Schedule>, IIncludableQueryable<Schedule, object>>>(),
+                    It.IsAny<bool>()))
+                .ReturnsAsync(schedule);
+
+            var service = new ScheduleService(_unitOfWorkMock.Object, _domainEventDispatcherMock.Object, _clockMock.Object);
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<Exception>(() => service.UpdateScheduleAsync(scheduleId, request));
+            Assert.Equal("Cannot change status of a cancelled schedule.", ex.Message);
+        }
     }
 }

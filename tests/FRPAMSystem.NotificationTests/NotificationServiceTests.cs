@@ -1,4 +1,5 @@
 using FRPAMSystem.BusinessTier.Constants;
+using FRPAMSystem.BusinessTier.Emails;
 using FRPAMSystem.BusinessTier.Payload.Notification;
 using FRPAMSystem.BusinessTier.Services.Implements;
 using FRPAMSystem.BusinessTier.Services.Interface;
@@ -19,6 +20,7 @@ namespace FRPAMSystem.NotificationTests
     {
         private readonly Mock<IUnitOfWork> _unitOfWorkMock = new();
         private readonly Mock<IEmailService> _emailServiceMock = new();
+        private readonly Mock<IEmailTemplateRenderer> _emailTemplateRendererMock = new();
         private readonly Mock<IHubContext<NotificationHub, INotificationClient>> _hubContextMock = new();
         private readonly Mock<IHubClients<INotificationClient>> _hubClientsMock = new();
         private readonly Mock<INotificationClient> _notificationClientMock = new();
@@ -31,6 +33,9 @@ namespace FRPAMSystem.NotificationTests
                 .Returns(_notificationClientMock.Object);
             _hubContextMock.Setup(h => h.Clients)
                 .Returns(_hubClientsMock.Object);
+            _emailTemplateRendererMock
+                .Setup(r => r.RenderHtml(It.IsAny<EmailTemplateModel>()))
+                .Returns("<html>ok</html>");
         }
 
         [Fact]
@@ -64,6 +69,7 @@ namespace FRPAMSystem.NotificationTests
             var service = new NotificationService(
                 _unitOfWorkMock.Object,
                 _emailServiceMock.Object,
+                _emailTemplateRendererMock.Object,
                 _hubContextMock.Object,
                 _loggerMock.Object,
                 _clockMock.Object);
@@ -135,6 +141,7 @@ namespace FRPAMSystem.NotificationTests
             var service = new NotificationService(
                 _unitOfWorkMock.Object,
                 _emailServiceMock.Object,
+                _emailTemplateRendererMock.Object,
                 _hubContextMock.Object,
                 _loggerMock.Object,
                 _clockMock.Object);
@@ -187,6 +194,7 @@ namespace FRPAMSystem.NotificationTests
             var service = new NotificationService(
                 _unitOfWorkMock.Object,
                 _emailServiceMock.Object,
+                _emailTemplateRendererMock.Object,
                 _hubContextMock.Object,
                 _loggerMock.Object,
                 _clockMock.Object);
@@ -225,6 +233,7 @@ namespace FRPAMSystem.NotificationTests
             var service = new NotificationService(
                 _unitOfWorkMock.Object,
                 _emailServiceMock.Object,
+                _emailTemplateRendererMock.Object,
                 _hubContextMock.Object,
                 _loggerMock.Object,
                 _clockMock.Object);

@@ -27,5 +27,11 @@ namespace FRPAMSystem.BusinessTier.Services.Interface
         Task<bool> DeleteHumanResourceProfileAsync(int id);
 
         Task<HumanResourceProfileResponse?> SyncSkillsAsync(int id, SyncHumanResourceSkillsRequest request);
+
+        Task<HumanResourceProfileResponse?> ActivateHumanResourceProfileAsync(int id);
+
+        Task<HumanResourceProfileResponse?> DeactivateHumanResourceProfileAsync(int id);
+
+        Task<HumanResourceProfileResponse?> SetLeaveHumanResourceProfileAsync(int id);
     }
 }

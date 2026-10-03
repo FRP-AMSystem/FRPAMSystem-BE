@@ -16,9 +16,15 @@ namespace FRPAMSystem.BusinessTier.AI.Models
 
         public double EquipmentScore { get; set; }
 
-        public double ScheduleScore { get; set; }
+        public double MaintenanceScore { get; set; }
 
         public int ConflictCount { get; set; }
+
+        public int HardViolationCount { get; set; }
+
+        public int SoftViolationCount { get; set; }
+
+        public bool IsFeasible => HardViolationCount == 0;
 
         public FitnessBreakdown FitnessBreakdown { get; set; } = new();
 
@@ -39,24 +45,34 @@ namespace FRPAMSystem.BusinessTier.AI.Models
                 LandScore = LandScore,
                 HumanScore = HumanScore,
                 EquipmentScore = EquipmentScore,
-                ScheduleScore = ScheduleScore,
+                MaintenanceScore = MaintenanceScore,
                 ConflictCount = ConflictCount,
+                HardViolationCount = HardViolationCount,
+                SoftViolationCount = SoftViolationCount,
                 FitnessBreakdown = new FitnessBreakdown
                 {
                     LandScore = FitnessBreakdown.LandScore,
                     HumanScore = FitnessBreakdown.HumanScore,
                     EquipmentScore = FitnessBreakdown.EquipmentScore,
-                    ScheduleScore = FitnessBreakdown.ScheduleScore,
+                    MaintenanceScore = FitnessBreakdown.MaintenanceScore,
                     PenaltyScore = FitnessBreakdown.PenaltyScore,
                     BonusScore = FitnessBreakdown.BonusScore,
-                    FinalScore = FitnessBreakdown.FinalScore
+                    FinalScore = FitnessBreakdown.FinalScore,
+                    OverallCalculation = FitnessBreakdown.OverallCalculation,
+                    Land = FitnessBreakdown.Land.Clone(),
+                    Human = FitnessBreakdown.Human.Clone(),
+                    Equipment = FitnessBreakdown.Equipment.Clone(),
+                    Maintenance = FitnessBreakdown.Maintenance.Clone(),
+                    Penalties = FitnessBreakdown.Penalties.Select(p => p.Clone()).ToList(),
+                    Bonuses = FitnessBreakdown.Bonuses.Select(b => b.Clone()).ToList()
                 },
                 ConstraintReport = new ConstraintReport
                 {
+                    HardViolationCount = ConstraintReport.HardViolationCount,
+                    SoftViolationCount = ConstraintReport.SoftViolationCount,
                     LandConflicts = ConstraintReport.LandConflicts.ToList(),
                     HumanConflicts = ConstraintReport.HumanConflicts.ToList(),
                     EquipmentConflicts = ConstraintReport.EquipmentConflicts.ToList(),
-                    ScheduleConflicts = ConstraintReport.ScheduleConflicts.ToList(),
                     MaintenanceConflicts = ConstraintReport.MaintenanceConflicts.ToList(),
                     SkillConflicts = ConstraintReport.SkillConflicts.ToList(),
                     RoleConflicts = ConstraintReport.RoleConflicts.ToList(),

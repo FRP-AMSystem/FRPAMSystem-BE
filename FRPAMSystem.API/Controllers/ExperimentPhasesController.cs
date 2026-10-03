@@ -3,6 +3,7 @@ using FRPAMSystem.BusinessTier.Payload.ExperimentPhase;
 using FRPAMSystem.BusinessTier.Services.Interface;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace FRPAMSystem_BE.Controllers
 {
@@ -112,6 +113,87 @@ namespace FRPAMSystem_BE.Controllers
                 success = true,
                 message = "Delete experiment phase successfully"
             });
+        }
+
+        [HttpPost("{id:int}/start")]
+        [Authorize(Roles = "Admin,Manager,Researcher")]
+        public async Task<IActionResult> StartExperimentPhase(int id)
+        {
+            var result = await _experimentPhaseService.StartExperimentPhaseAsync(id, GetCurrentUserId());
+
+            if (result == null)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "Experiment phase not found"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "Start experiment phase successfully",
+                data = result
+            });
+        }
+
+        [HttpPost("{id:int}/complete")]
+        [Authorize(Roles = "Admin,Manager,Researcher")]
+        public async Task<IActionResult> CompleteExperimentPhase(int id)
+        {
+            var result = await _experimentPhaseService.CompleteExperimentPhaseAsync(id, GetCurrentUserId());
+
+            if (result == null)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "Experiment phase not found"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "Complete experiment phase successfully",
+                data = result
+            });
+        }
+
+        [HttpPost("{id:int}/cancel")]
+        [Authorize(Roles = "Admin,Manager,Researcher")]
+        public async Task<IActionResult> CancelExperimentPhase(int id, [FromBody] CancelPhaseRequest? request)
+        {
+            var result = await _experimentPhaseService.CancelExperimentPhaseAsync(id, GetCurrentUserId(), request?.Reason);
+
+            if (result == null)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = "Experiment phase not found"
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = "Cancel experiment phase successfully",
+                data = result
+            });
+        }
+
+        private int? GetCurrentUserId()
+        {
+            var userIdValue = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (int.TryParse(userIdValue, out var userId))
+            {
+                return userId;
+            }
+
+            return null;
         }
     }
 }

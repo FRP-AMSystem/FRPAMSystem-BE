@@ -1,4 +1,4 @@
-﻿using FRPAMSystem.BusinessTier.Constants;
+using FRPAMSystem.BusinessTier.Constants;
 using FRPAMSystem.BusinessTier.Payload.AllocationEquipmentDetail;
 using FRPAMSystem.DataTier.Paginate;
 using System;
@@ -26,6 +26,10 @@ namespace FRPAMSystem.BusinessTier.Services.Interface
             int id,
             int userId);
 
+        Task<bool> UserCanAccessAllocationEquipmentDetailAsync(
+            int allocationEquipmentDetailId,
+            int userId);
+
         Task<AllocationEquipmentDetailResponse?> HandoverMineAsync(int id, int userId);
 
         Task<AllocationEquipmentDetailResponse?> ReturnMineAsync(int id, int userId);
@@ -38,5 +42,8 @@ namespace FRPAMSystem.BusinessTier.Services.Interface
             AllocationEquipmentDetailRequest request);
 
         Task<bool> DeleteAllocationEquipmentDetailAsync(int id);
+
+        Task<List<AvailableEquipmentSubstituteResponse>> GetAvailableSubstitutesAsync(
+            AvailableEquipmentSubstituteFilter filter);
     }
 }

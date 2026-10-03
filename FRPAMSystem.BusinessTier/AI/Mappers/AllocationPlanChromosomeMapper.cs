@@ -18,11 +18,9 @@ namespace FRPAMSystem.BusinessTier.AI.Mappers
             var landDetails = plan.AllocationLandDetails?.ToList() ?? new List<AllocationLandDetail>();
             var humanDetails = plan.AllocationHumanDetails?.ToList() ?? new List<AllocationHumanDetail>();
             var equipmentDetails = plan.AllocationEquipmentDetails?.ToList() ?? new List<AllocationEquipmentDetail>();
-            var schedules = plan.Schedules?.ToList() ?? new List<Schedule>();
 
             foreach (var phase in phases)
             {
-                var phaseSchedules = schedules.Where(s => s.PhaseId == phase.PhaseId).ToList();
                 var phaseHumanDetails = humanDetails.Where(h =>
                     (h.PhaseHumanReqId.HasValue && phaseHumanReqs.TryGetValue(h.PhaseHumanReqId.Value, out var phr) && phr.PhaseId == phase.PhaseId) ||
                     (h.PhaseHumanReq != null && h.PhaseHumanReq.PhaseId == phase.PhaseId)
@@ -53,12 +51,7 @@ namespace FRPAMSystem.BusinessTier.AI.Mappers
                 DateTime startDate = phase.ExpectedStartDate;
                 DateTime endDate = phase.ExpectedEndDate;
 
-                if (phaseSchedules.Count > 0)
-                {
-                    startDate = phaseSchedules.Min(s => s.StartDate);
-                    endDate = phaseSchedules.Max(s => s.EndDate);
-                }
-                else if (phaseHumanDetails.Count > 0 || phaseEquipmentDetails.Count > 0)
+                if (phaseHumanDetails.Count > 0 || phaseEquipmentDetails.Count > 0)
                 {
                     var allStartDates = phaseHumanDetails.Select(h => h.StartDate)
                         .Concat(phaseEquipmentDetails.Select(e => e.StartDate)).ToList();
@@ -99,10 +92,6 @@ namespace FRPAMSystem.BusinessTier.AI.Mappers
                 foreach (var h in phaseHumanDetails)
                 {
                     assignedHumanIds.Add(h.HumanResourceId);
-                }
-                foreach (var s in phaseSchedules.Where(s => s.AssignedHumanResourceId.HasValue))
-                {
-                    assignedHumanIds.Add(s.AssignedHumanResourceId!.Value);
                 }
                 gene.AssignedHumanResourceIds = assignedHumanIds.ToList();
 
@@ -171,6 +160,15 @@ namespace FRPAMSystem.BusinessTier.AI.Mappers
 
                 gene.AssignedEquipmentInstanceIds = assignedEquipmentIds.ToList();
                 chromosome.Genes.Add(gene);
+            }
+
+            var landId = chromosome.Genes.Select(g => g.LandId).FirstOrDefault(id => id.HasValue);
+            if (landId.HasValue)
+            {
+                foreach (var gene in chromosome.Genes)
+                {
+                    gene.LandId = landId;
+                }
             }
 
             return chromosome;

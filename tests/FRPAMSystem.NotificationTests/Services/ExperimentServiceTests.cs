@@ -21,11 +21,17 @@ namespace FRPAMSystem.NotificationTests.Services
         private readonly Mock<IClock> _clockMock = new();
         private readonly Mock<IGenericRepository<Experiment>> _experimentRepoMock = new();
         private readonly Mock<IGenericRepository<User>> _userRepoMock = new();
+        private readonly Mock<IGenericRepository<AllocationEquipmentDetail>> _detailRepoMock = new();
+        private readonly Mock<IGenericRepository<AllocationPlan>> _planRepoMock = new();
+        private readonly Mock<IGenericRepository<ExperimentPhase>> _phaseRepoMock = new();
 
         public ExperimentServiceTests()
         {
             _unitOfWorkMock.Setup(u => u.GetRepository<Experiment>()).Returns(_experimentRepoMock.Object);
             _unitOfWorkMock.Setup(u => u.GetRepository<User>()).Returns(_userRepoMock.Object);
+            _unitOfWorkMock.Setup(u => u.GetRepository<AllocationEquipmentDetail>()).Returns(_detailRepoMock.Object);
+            _unitOfWorkMock.Setup(u => u.GetRepository<AllocationPlan>()).Returns(_planRepoMock.Object);
+            _unitOfWorkMock.Setup(u => u.GetRepository<ExperimentPhase>()).Returns(_phaseRepoMock.Object);
             _clockMock.Setup(c => c.Now).Returns(new DateTime(2026, 8, 21, 12, 0, 0));
         }
 
@@ -408,7 +414,7 @@ namespace FRPAMSystem.NotificationTests.Services
             int experimentId = 50;
             var request = new UpdateExperimentStatusRequest
             {
-                Status = "InProgress"
+                Status = "Ready"
             };
 
             var experiment = new Experiment
@@ -434,10 +440,312 @@ namespace FRPAMSystem.NotificationTests.Services
 
             // Assert
             Assert.NotNull(result);
-            Assert.Equal("InProgress", experiment.Status);
-            Assert.Equal("InProgress", result.Status);
+            Assert.Equal("Ready", experiment.Status);
+            Assert.Equal("Ready", result.Status);
             Assert.Equal(new DateTime(2026, 8, 21, 12, 0, 0), experiment.UpdatedAt);
             _unitOfWorkMock.Verify(u => u.CommitAsync(), Times.Once);
+        }
+
+        [Fact]
+        public async Task SubmitExperimentAsync_WhenNotDraft_ShouldThrowException()
+        {
+            // Arrange
+            var experiment = new Experiment
+            {
+                ExperimentId = 1,
+                Status = ExperimentStatus.Planning.ToString()
+            };
+
+            _experimentRepoMock.Setup(r => r.FirstOrDefaultAsync(
+                    It.IsAny<Expression<Func<Experiment, bool>>>(),
+                    It.IsAny<Func<IQueryable<Experiment>, IOrderedQueryable<Experiment>>>(),
+                    It.IsAny<Func<IQueryable<Experiment>, IIncludableQueryable<Experiment, object>>>(),
+                    It.IsAny<bool>()))
+                .ReturnsAsync(experiment);
+
+            var service = new ExperimentService(_unitOfWorkMock.Object, _domainEventDispatcherMock.Object, _clockMock.Object);
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<Exception>(() => service.SubmitExperimentAsync(1));
+            Assert.Equal("Only draft experiments can be submitted.", ex.Message);
+        }
+
+        [Fact]
+        public async Task ApproveExperimentAsync_WhenNotSubmitted_ShouldThrowException()
+        {
+            // Arrange
+            var experiment = new Experiment
+            {
+                ExperimentId = 1,
+                Status = ExperimentStatus.Draft.ToString()
+            };
+
+            _experimentRepoMock.Setup(r => r.FirstOrDefaultAsync(
+                    It.IsAny<Expression<Func<Experiment, bool>>>(),
+                    It.IsAny<Func<IQueryable<Experiment>, IOrderedQueryable<Experiment>>>(),
+                    It.IsAny<Func<IQueryable<Experiment>, IIncludableQueryable<Experiment, object>>>(),
+                    It.IsAny<bool>()))
+                .ReturnsAsync(experiment);
+
+            var service = new ExperimentService(_unitOfWorkMock.Object, _domainEventDispatcherMock.Object, _clockMock.Object);
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<Exception>(() => service.ApproveExperimentAsync(1, 2));
+            Assert.Equal("Only submitted experiments can be approved.", ex.Message);
+        }
+
+        [Fact]
+        public async Task StartExperimentAsync_WhenReady_ShouldTransitionToRunning()
+        {
+            // Arrange
+            var experiment = new Experiment
+            {
+                ExperimentId = 10,
+                Status = ExperimentStatus.Ready.ToString()
+            };
+
+            _experimentRepoMock.Setup(r => r.FirstOrDefaultAsync(
+                    It.IsAny<Expression<Func<Experiment, bool>>>(),
+                    It.IsAny<Func<IQueryable<Experiment>, IOrderedQueryable<Experiment>>>(),
+                    It.IsAny<Func<IQueryable<Experiment>, IIncludableQueryable<Experiment, object>>>(),
+                    It.IsAny<bool>()))
+                .ReturnsAsync(experiment);
+
+            var service = new ExperimentService(_unitOfWorkMock.Object, _domainEventDispatcherMock.Object, _clockMock.Object);
+
+            // Act
+            var result = await service.StartExperimentAsync(10, 2);
+
+            // Assert
+            Assert.NotNull(result);
+            Assert.Equal(ExperimentStatus.Running.ToString(), experiment.Status);
+            _unitOfWorkMock.Verify(u => u.CommitAsync(), Times.Once);
+        }
+
+        [Fact]
+        public async Task StartExperimentAsync_WhenNotReady_ShouldThrowException()
+        {
+            // Arrange
+            var experiment = new Experiment
+            {
+                ExperimentId = 10,
+                Status = ExperimentStatus.Planning.ToString()
+            };
+
+            _experimentRepoMock.Setup(r => r.FirstOrDefaultAsync(
+                    It.IsAny<Expression<Func<Experiment, bool>>>(),
+                    It.IsAny<Func<IQueryable<Experiment>, IOrderedQueryable<Experiment>>>(),
+                    It.IsAny<Func<IQueryable<Experiment>, IIncludableQueryable<Experiment, object>>>(),
+                    It.IsAny<bool>()))
+                .ReturnsAsync(experiment);
+
+            var service = new ExperimentService(_unitOfWorkMock.Object, _domainEventDispatcherMock.Object, _clockMock.Object);
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<Exception>(() => service.StartExperimentAsync(10, 2));
+            Assert.Equal("Only ready experiments can be started.", ex.Message);
+        }
+
+        [Fact]
+        public async Task CompleteExperimentAsync_WhenEquipmentStillInUse_ShouldThrowException()
+        {
+            // Arrange
+            var experiment = new Experiment
+            {
+                ExperimentId = 20,
+                Status = ExperimentStatus.Running.ToString()
+            };
+
+            _experimentRepoMock.Setup(r => r.FirstOrDefaultAsync(
+                    It.IsAny<Expression<Func<Experiment, bool>>>(),
+                    It.IsAny<Func<IQueryable<Experiment>, IOrderedQueryable<Experiment>>>(),
+                    It.IsAny<Func<IQueryable<Experiment>, IIncludableQueryable<Experiment, object>>>(),
+                    It.IsAny<bool>()))
+                .ReturnsAsync(experiment);
+
+            _detailRepoMock.Setup(r => r.AnyAsync(It.IsAny<Expression<Func<AllocationEquipmentDetail, bool>>>()))
+                .ReturnsAsync(true);
+
+            var service = new ExperimentService(_unitOfWorkMock.Object, _domainEventDispatcherMock.Object, _clockMock.Object);
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<Exception>(() => service.CompleteExperimentAsync(20, 2));
+            Assert.Contains("equipment is still in use", ex.Message);
+        }
+
+        [Fact]
+        public async Task CompleteExperimentAsync_WhenNoEquipmentInUse_ShouldTransitionToCompleted()
+        {
+            // Arrange
+            var experiment = new Experiment
+            {
+                ExperimentId = 20,
+                Status = ExperimentStatus.Running.ToString()
+            };
+
+            _experimentRepoMock.Setup(r => r.FirstOrDefaultAsync(
+                    It.IsAny<Expression<Func<Experiment, bool>>>(),
+                    It.IsAny<Func<IQueryable<Experiment>, IOrderedQueryable<Experiment>>>(),
+                    It.IsAny<Func<IQueryable<Experiment>, IIncludableQueryable<Experiment, object>>>(),
+                    It.IsAny<bool>()))
+                .ReturnsAsync(experiment);
+
+            _detailRepoMock.Setup(r => r.AnyAsync(It.IsAny<Expression<Func<AllocationEquipmentDetail, bool>>>()))
+                .ReturnsAsync(false);
+
+            var service = new ExperimentService(_unitOfWorkMock.Object, _domainEventDispatcherMock.Object, _clockMock.Object);
+
+            // Act
+            var result = await service.CompleteExperimentAsync(20, 2);
+
+            // Assert
+            Assert.NotNull(result);
+            Assert.Equal(ExperimentStatus.Completed.ToString(), experiment.Status);
+            _unitOfWorkMock.Verify(u => u.CommitAsync(), Times.Once);
+        }
+
+        [Fact]
+        public async Task CancelExperimentAsync_WhenAlreadyCompleted_ShouldThrowException()
+        {
+            // Arrange
+            var experiment = new Experiment
+            {
+                ExperimentId = 30,
+                Status = ExperimentStatus.Completed.ToString()
+            };
+
+            _experimentRepoMock.Setup(r => r.FirstOrDefaultAsync(
+                    It.IsAny<Expression<Func<Experiment, bool>>>(),
+                    It.IsAny<Func<IQueryable<Experiment>, IOrderedQueryable<Experiment>>>(),
+                    It.IsAny<Func<IQueryable<Experiment>, IIncludableQueryable<Experiment, object>>>(),
+                    It.IsAny<bool>()))
+                .ReturnsAsync(experiment);
+
+            var service = new ExperimentService(_unitOfWorkMock.Object, _domainEventDispatcherMock.Object, _clockMock.Object);
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<Exception>(() => service.CancelExperimentAsync(30, 2));
+            Assert.Equal("Completed or cancelled experiments cannot be cancelled.", ex.Message);
+        }
+
+        [Fact]
+        public async Task UpdateExperimentAsync_WhenNotDraft_ShouldThrowException()
+        {
+            // Arrange
+            var experiment = new Experiment
+            {
+                ExperimentId = 40,
+                Status = ExperimentStatus.Running.ToString()
+            };
+
+            _experimentRepoMock.Setup(r => r.FirstOrDefaultAsync(
+                    It.IsAny<Expression<Func<Experiment, bool>>>(),
+                    It.IsAny<Func<IQueryable<Experiment>, IOrderedQueryable<Experiment>>>(),
+                    It.IsAny<Func<IQueryable<Experiment>, IIncludableQueryable<Experiment, object>>>(),
+                    It.IsAny<bool>()))
+                .ReturnsAsync(experiment);
+
+            _userRepoMock.Setup(r => r.AnyAsync(It.IsAny<Expression<Func<User, bool>>>()))
+                .ReturnsAsync(true);
+
+            var service = new ExperimentService(_unitOfWorkMock.Object, _domainEventDispatcherMock.Object, _clockMock.Object);
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<Exception>(() => service.UpdateExperimentAsync(40, new ExperimentRequest
+            {
+                ExperimentName = "Updated Name",
+                ResearcherId = 1,
+                ExpectStartDate = DateTime.UtcNow,
+                ExpectEndDate = DateTime.UtcNow.AddDays(10)
+            }));
+
+            Assert.Equal("Only draft experiments can be edited.", ex.Message);
+        }
+
+        [Fact]
+        public async Task DeleteExperimentAsync_WhenHasAllocationPlan_ShouldThrowException()
+        {
+            // Arrange
+            var experiment = new Experiment
+            {
+                ExperimentId = 45,
+                Status = ExperimentStatus.Draft.ToString()
+            };
+
+            _experimentRepoMock.Setup(r => r.FirstOrDefaultAsync(
+                    It.IsAny<Expression<Func<Experiment, bool>>>(),
+                    It.IsAny<Func<IQueryable<Experiment>, IOrderedQueryable<Experiment>>>(),
+                    It.IsAny<Func<IQueryable<Experiment>, IIncludableQueryable<Experiment, object>>>(),
+                    It.IsAny<bool>()))
+                .ReturnsAsync(experiment);
+
+            _planRepoMock.Setup(r => r.AnyAsync(It.IsAny<Expression<Func<AllocationPlan, bool>>>()))
+                .ReturnsAsync(true);
+
+            var service = new ExperimentService(_unitOfWorkMock.Object, _domainEventDispatcherMock.Object, _clockMock.Object);
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<Exception>(() => service.DeleteExperimentAsync(45));
+            Assert.Equal("Cannot delete an experiment that has associated allocation plans.", ex.Message);
+        }
+
+        [Fact]
+        public async Task UpdateExperimentStatusAsync_WithInvalidTransition_ShouldThrowException()
+        {
+            // Arrange
+            var experiment = new Experiment
+            {
+                ExperimentId = 55,
+                Status = ExperimentStatus.Draft.ToString()
+            };
+
+            _experimentRepoMock.Setup(r => r.FirstOrDefaultAsync(
+                    It.IsAny<Expression<Func<Experiment, bool>>>(),
+                    It.IsAny<Func<IQueryable<Experiment>, IOrderedQueryable<Experiment>>>(),
+                    It.IsAny<Func<IQueryable<Experiment>, IIncludableQueryable<Experiment, object>>>(),
+                    It.IsAny<bool>()))
+                .ReturnsAsync(experiment);
+
+            var service = new ExperimentService(_unitOfWorkMock.Object, _domainEventDispatcherMock.Object, _clockMock.Object);
+
+            // Act & Assert: jumping directly from Draft to Completed is forbidden
+            var ex = await Assert.ThrowsAsync<Exception>(() =>
+                service.UpdateExperimentStatusAsync(55, new UpdateExperimentStatusRequest
+                {
+                    Status = "Completed"
+                }));
+
+            Assert.Contains("Invalid status transition", ex.Message);
+        }
+
+        [Fact]
+        public async Task CompleteExperimentAsync_WhenPhasesStillInProgress_ShouldThrowException()
+        {
+            // Arrange
+            var experiment = new Experiment
+            {
+                ExperimentId = 60,
+                Status = ExperimentStatus.Running.ToString()
+            };
+
+            _experimentRepoMock.Setup(r => r.FirstOrDefaultAsync(
+                    It.IsAny<Expression<Func<Experiment, bool>>>(),
+                    It.IsAny<Func<IQueryable<Experiment>, IOrderedQueryable<Experiment>>>(),
+                    It.IsAny<Func<IQueryable<Experiment>, IIncludableQueryable<Experiment, object>>>(),
+                    It.IsAny<bool>()))
+                .ReturnsAsync(experiment);
+
+            _detailRepoMock.Setup(r => r.AnyAsync(It.IsAny<Expression<Func<AllocationEquipmentDetail, bool>>>()))
+                .ReturnsAsync(false);
+
+            _phaseRepoMock.Setup(r => r.AnyAsync(It.IsAny<Expression<Func<ExperimentPhase, bool>>>()))
+                .ReturnsAsync(true); // Still has in-progress phases
+
+            var service = new ExperimentService(_unitOfWorkMock.Object, _domainEventDispatcherMock.Object, _clockMock.Object);
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<Exception>(() => service.CompleteExperimentAsync(60, 1));
+            Assert.Equal("Cannot complete experiment while phases are still planned or in progress.", ex.Message);
         }
     }
 }
