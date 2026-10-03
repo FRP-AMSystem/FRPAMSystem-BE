@@ -75,6 +75,11 @@ public partial class ForestryResourcePlanningDbContext : DbContext
 
     public virtual DbSet<User> Users { get; set; }
 
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        // Connection string is injected via DI (appsettings.json).
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<AllocationEquipmentDetail>(entity =>

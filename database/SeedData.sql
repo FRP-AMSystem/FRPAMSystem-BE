@@ -1,16 +1,17 @@
 /*
 ================================================================================
-  Forestry Resource Planning DB - Sample Data
+  Forestry Resource Planning DB - Sample Data (MonsterASP / db54885)
   Run AFTER ForestryResourcePlanningDB.sql (schema)
 
-  Local     : USE [ForestryResourcePlanningDB]
-  MonsterASP: change to USE [db54885]
+  Server : db54885.databaseasp.net
+  Database: [db54885]
 
   Demo accounts (shared password): Password123!
+  Ctrl+A rồi Execute toàn bộ file.
 ================================================================================
 */
---Ctrl+A r?i run to�n b? file lu�n--
-USE [ForestryResourcePlanningDB];
+
+USE [db54885];
 GO
 
 SET NOCOUNT ON;
