@@ -31,9 +31,10 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowAll", policy =>
     {
         policy
-            .AllowAnyOrigin()
+            .SetIsOriginAllowed(origin => true)
             .AllowAnyHeader()
-            .AllowAnyMethod();
+            .AllowAnyMethod()
+            .AllowCredentials();
     });
 });
 builder.Services.AddSignalR();
@@ -55,19 +56,14 @@ if (enableSwagger)
     app.MapGet("/", () => Results.Redirect("/swagger/index.html"));
 }
 
-if (app.Configuration.GetValue("UseHttpsRedirection", false))
-{
-    app.UseHttpsRedirection();
-}
-
-app.MapHub<NotificationHub>("/hubs/notification");
-
+// Bật CORS trước khi map Hub và Controllers
 app.UseCors("AllowAll");
 
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<NotificationHub>("/hubs/notification");
 
 app.Run();
 
